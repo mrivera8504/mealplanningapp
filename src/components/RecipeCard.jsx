@@ -1,7 +1,7 @@
 import CategoryGlyph from './CategoryGlyph'
 import { CATEGORY_LABELS } from '../lib/houseRecipes'
 
-export default function RecipeCard({ recipe, saved, onView, onToggleSave, onAddToDay }) {
+export default function RecipeCard({ recipe, saved, onView, onToggleSave, onAddToDay, onEdit, onDelete }) {
   const primaryCat = recipe.categories?.[0] || 'stew'
   return (
     <article className="recipe-card">
@@ -34,17 +34,29 @@ export default function RecipeCard({ recipe, saved, onView, onToggleSave, onAddT
         </div>
       </div>
       <div className="recipe-card-actions">
-        <button
-          type="button"
-          className={`btn btn-sm ${saved ? 'btn-basil' : 'btn-secondary'}`}
-          onClick={onToggleSave}
-          aria-pressed={saved}
-        >
-          {saved ? 'Saved ✓' : 'Save'}
-        </button>
+        {onToggleSave && (
+          <button
+            type="button"
+            className={`btn btn-sm ${saved ? 'btn-basil' : 'btn-secondary'}`}
+            onClick={onToggleSave}
+            aria-pressed={saved}
+          >
+            {saved ? 'Saved ✓' : 'Save'}
+          </button>
+        )}
+        {onEdit && (
+          <button type="button" className="btn btn-sm btn-secondary" onClick={onEdit}>
+            Edit
+          </button>
+        )}
         {onAddToDay && (
           <button type="button" className="btn btn-sm btn-primary" onClick={onAddToDay}>
             Add to plan
+          </button>
+        )}
+        {onDelete && (
+          <button type="button" className="btn btn-danger-ghost btn-sm" onClick={onDelete} aria-label={`Delete ${recipe.title}`}>
+            ✕
           </button>
         )}
       </div>

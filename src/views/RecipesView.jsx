@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import RecipeCard from '../components/RecipeCard'
 import RecipeDetail from '../components/RecipeDetail'
+import RecipeEditor from '../components/RecipeEditor'
 import DayPicker from '../components/DayPicker'
 import { useSavedRecipes } from '../hooks/useSavedRecipes'
+import { useMyRecipes } from '../hooks/useMyRecipes'
 import { usePlan } from '../hooks/usePlan'
 import { useToast } from '../context/ToastContext'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
@@ -29,6 +31,7 @@ function searchHouse({ query, cuisine, diet, ingredients }) {
 export default function RecipesView() {
   const toast = useToast()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
+  const { mine, upsertMine, removeMine } = useMyRecipes()
   const weekId = weekIdFor(new Date())
   const { plan, setMeal } = usePlan(weekId)
   const days = useMemo(() => weekDates(weekId), [weekId])
@@ -45,6 +48,7 @@ export default function RecipesView() {
   const [searchNote, setSearchNote] = useState(null)
   const [viewing, setViewing] = useState(null)
   const [placing, setPlacing] = useState(null) // recipe awaiting a day pick
+  const [editing, setEditing] = useState(null) // null | 'new' | recipe
 
   useEffect(() => {
     document.title = "Recipes · What's for Dinner"
@@ -77,7 +81,7 @@ export default function RecipesView() {
     }
   }
 
-  const list = tab === 'saved' ? saved : tab === 'house' ? HOUSE_RECIPES : results
+  const list = tab === 'saved' ? saved : tab === 'mine' ? mine : tab === 'house' ? HOUSE_RECIPES : results
 
   const handleToggleSave = async (recipe) => {
     const nowSaved = await toggleSave(recipe)
@@ -98,6 +102,7 @@ export default function RecipesView() {
         {[
           ['find', 'Find new'],
           ['saved', `Saved${saved.length ? ` (${saved.length})` : ''}`],
+          ['mine', `My recipes${mine.length ? ` (${mine.length})` : ''}`],
           ['house', 'House collection'],
         ].map(([key, label]) => (
           <button
@@ -174,6 +179,14 @@ export default function RecipesView() {
         <p className="banner banner-info">Recipe search is resting; here are matches from the house collection.</p>
       )}
 
+      {tab === 'mine' && (
+        <div className="mine-toolbar">
+          <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
+            Add a recipe
+          </button>
+        </div>
+      )}
+
       {list === null && tab === 'find' ? (
         <div className="recipes-empty">
           <p className="note recipes-empty-line">What are you hungry for?</p>
@@ -182,13 +195,24 @@ export default function RecipesView() {
       ) : list.length === 0 ? (
         <div className="recipes-empty">
           <p className="note recipes-empty-line">
-            {tab === 'saved' ? 'No saved recipes yet.' : 'Nothing matched that craving.'}
+            {tab === 'saved'
+              ? 'No saved recipes yet.'
+              : tab === 'mine'
+                ? 'Your recipe book is waiting for its first entry.'
+                : 'Nothing matched that craving.'}
           </p>
           <p className="muted">
             {tab === 'saved'
               ? 'Tap Save on any recipe and it will live here, ready for meal plans.'
-              : 'Loosen a filter or two and try again.'}
+              : tab === 'mine'
+                ? 'Add the dinners you actually make — then fill whole weeks with them from the planner.'
+                : 'Loosen a filter or two and try again.'}
           </p>
+          {tab === 'mine' && (
+            <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
+              Write down a recipe
+            </button>
+          )}
         </div>
       ) : (
         <div className="recipes-grid">
@@ -198,7 +222,16 @@ export default function RecipesView() {
               recipe={r}
               saved={isSaved(r.id)}
               onView={() => setViewing(r)}
-              onToggleSave={() => handleToggleSave(r)}
+              onToggleSave={r.mine ? undefined : () => handleToggleSave(r)}
+              onEdit={r.mine ? () => setEditing(r) : undefined}
+              onDelete={
+                r.mine
+                  ? () => {
+                      removeMine(r.id)
+                      toast(`${r.title} removed from your recipe book.`)
+                    }
+                  : undefined
+              }
               onAddToDay={() => setPlacing(r)}
             />
           ))}
@@ -222,6 +255,18 @@ export default function RecipesView() {
           plan={plan}
           onPick={placeOnDay}
           onClose={() => setPlacing(null)}
+        />
+      )}
+
+      {editing && (
+        <RecipeEditor
+          recipe={editing === 'new' ? null : editing}
+          onSave={(recipe) => {
+            upsertMine(recipe)
+            toast(editing === 'new' ? `${recipe.title} added to your recipe book.` : 'Recipe updated.')
+            setEditing(null)
+          }}
+          onClose={() => setEditing(null)}
         />
       )}
     </div>

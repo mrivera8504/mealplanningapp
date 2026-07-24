@@ -52,6 +52,16 @@ export function makeRepo(user) {
       async removeRecipe(recipeId) {
         await deleteDoc(userDoc(uid, 'savedRecipes', recipeId))
       },
+      async loadMyRecipes() {
+        const snap = await getDocs(collection(db, 'users', uid, 'myRecipes'))
+        return snap.docs.map((d) => d.data())
+      },
+      async saveMyRecipe(recipe) {
+        await setDoc(userDoc(uid, 'myRecipes', recipe.id), recipe)
+      },
+      async removeMyRecipe(recipeId) {
+        await deleteDoc(userDoc(uid, 'myRecipes', recipeId))
+      },
       async loadGrocery(weekId) {
         const snap = await getDoc(userDoc(uid, 'grocery', weekId))
         return snap.exists() ? snap.data() : null
@@ -88,6 +98,17 @@ export function makeRepo(user) {
       const saved = lsGet('saved') || []
       lsSet('saved', saved.filter((r) => r.id !== recipeId))
     },
+    async loadMyRecipes() {
+      return lsGet('mine') || []
+    },
+    async saveMyRecipe(recipe) {
+      const mine = lsGet('mine') || []
+      lsSet('mine', [...mine.filter((r) => r.id !== recipe.id), recipe])
+    },
+    async removeMyRecipe(recipeId) {
+      const mine = lsGet('mine') || []
+      lsSet('mine', mine.filter((r) => r.id !== recipeId))
+    },
     async loadGrocery(weekId) {
       return lsGet(`grocery:${weekId}`)
     },
@@ -115,5 +136,10 @@ export async function migrateLocalToCloud(cloudRepo, weekId) {
   const [localSaved, cloudSaved] = await Promise.all([localRepo.loadSavedRecipes(), cloudRepo.loadSavedRecipes()])
   if (localSaved.length && !cloudSaved.length) {
     await Promise.all(localSaved.map((r) => cloudRepo.saveRecipe(r)))
+  }
+
+  const [localMine, cloudMine] = await Promise.all([localRepo.loadMyRecipes(), cloudRepo.loadMyRecipes()])
+  if (localMine.length && !cloudMine.length) {
+    await Promise.all(localMine.map((r) => cloudRepo.saveMyRecipe(r)))
   }
 }

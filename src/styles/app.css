@@ -1077,6 +1077,145 @@
   flex: 1;
 }
 
+/* ————— Recipe editor ————— */
+.recipe-editor {
+  max-width: 620px;
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+
+.editor-form fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.editor-form legend {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+  margin-bottom: var(--sp-2);
+  padding: 0;
+}
+
+.editor-row {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.editor-row .field {
+  width: 6rem;
+}
+
+.editor-row .editor-cuisine {
+  flex: 1;
+  width: auto;
+}
+
+.chip-toggle {
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  background: var(--paper);
+  color: var(--ink-soft);
+  border-color: var(--rule-strong);
+}
+
+.chip-toggle:hover {
+  border-color: var(--ink-soft);
+}
+
+.chip-on {
+  background: var(--basil);
+  border-color: var(--basil);
+  color: var(--paper-bright);
+}
+
+.editor-ings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.editor-ing-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.editor-ing-amt {
+  width: 4.2rem;
+}
+
+.editor-ing-unit {
+  width: 5.2rem;
+}
+
+.editor-ing-name {
+  flex: 1;
+}
+
+.editor-add-ing {
+  align-self: flex-start;
+  margin-top: var(--sp-2);
+}
+
+.editor-steps {
+  resize: vertical;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.editor-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.mine-toolbar {
+  margin-bottom: var(--sp-4);
+}
+
+/* ————— Takeout picker ————— */
+.takeout-picker {
+  max-width: 380px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.takeout-title {
+  font-size: var(--text-xl);
+}
+
+.takeout-blurb {
+  font-size: var(--text-md);
+}
+
+.takeout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  width: 100%;
+}
+
+.meal-slot-glyph-takeout {
+  color: var(--slate-deep);
+}
+
+.move-menu button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ————— Toasts ————— */
 .toast-stack {
   position: fixed;

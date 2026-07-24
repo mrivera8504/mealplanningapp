@@ -65,6 +65,12 @@ const GLYPHS = {
       <path d="M12 13V8.5M12 13l3 2M9.5 3.5h5" />
     </g>
   ),
+  takeout: (
+    <g {...S}>
+      <path d="M6.5 9.5h11l-1.2 10a1.5 1.5 0 0 1-1.5 1.3H9.2a1.5 1.5 0 0 1-1.5-1.3l-1.2-10z" />
+      <path d="M5 9.5L7.5 5h9L19 9.5M9.8 13.2h4.4" />
+    </g>
+  ),
 }
 
 export default function CategoryGlyph({ category, size = 24 }) {

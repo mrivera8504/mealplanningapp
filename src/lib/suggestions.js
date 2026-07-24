@@ -36,11 +36,11 @@ export function suggestForDay(weatherDay, pool, exclude = new Set()) {
   return { recipe: pick.recipe, mood, matched: pick.score > 0 }
 }
 
-/** Suggestion pool = user's saved recipes first, then the house collection. */
-export function buildPool(savedRecipes) {
+/** Suggestion pool: personal recipes first, then saved, then the house collection. */
+export function buildPool(savedRecipes, myRecipes) {
   const seen = new Set()
   const pool = []
-  for (const r of [...(savedRecipes || []), ...HOUSE_RECIPES]) {
+  for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...HOUSE_RECIPES]) {
     if (!seen.has(r.id)) {
       seen.add(r.id)
       pool.push(r)

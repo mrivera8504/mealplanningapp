@@ -475,3 +475,6 @@ export const CATEGORY_LABELS = {
   cold: 'cold prep',
   quick: 'quick',
 }
+
+/** Shown on chips for meals but not offered as a tag when editing recipes. */
+export const EXTRA_LABELS = { takeout: 'takeout' }
