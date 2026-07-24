@@ -1,0 +1,22 @@
+{
+  "name": "whats-for-dinner",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^11.10.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.1"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^2.8.2",
+    "@vitejs/plugin-react": "^4.6.0",
+    "vite": "^6.3.5"
+  }
+}
