@@ -7,6 +7,7 @@ import { useSavedRecipes } from '../hooks/useSavedRecipes'
 import { useMyRecipes } from '../hooks/useMyRecipes'
 import { usePlan } from '../hooks/usePlan'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
 import { searchRecipes } from '../lib/spoonacular'
 import { weekDates, weekIdFor } from '../lib/dates'
@@ -29,6 +30,7 @@ function searchHouse({ query, cuisine, diet, ingredients }) {
 }
 
 export default function RecipesView() {
+  const { user } = useAuth()
   const toast = useToast()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine, upsertMine, removeMine } = useMyRecipes()
@@ -267,6 +269,7 @@ export default function RecipesView() {
             setEditing(null)
           }}
           onClose={() => setEditing(null)}
+          user={user}
         />
       )}
     </div>

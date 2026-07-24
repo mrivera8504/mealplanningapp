@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
 
 const cfg = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,11 +19,13 @@ export const firebaseReady = Boolean(cfg.apiKey && cfg.projectId && cfg.appId)
 let app = null
 export let auth = null
 export let db = null
+export let storage = null
 export let googleProvider = null
 
 if (firebaseReady) {
   app = initializeApp(cfg)
   auth = getAuth(app)
   db = getFirestore(app)
+  storage = getStorage(app)
   googleProvider = new GoogleAuthProvider()
 }

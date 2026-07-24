@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore'
-import { db } from './firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from './firebase'
 
 /**
  * Persistence with two backends behind one interface:
@@ -122,6 +123,18 @@ export function makeRepo(user) {
       lsSet('settings', settings)
     },
   }
+}
+
+/**
+ * Upload a recipe photo for the given user and recipe id.
+ * Returns the public download URL, or null if Storage isn't available.
+ */
+export async function uploadRecipeImage(uid, recipeId, file) {
+  if (!storage) return null
+  const ext = file.name.split('.').pop()
+  const path = `users/${uid}/recipes/${recipeId}.${ext}`
+  const snap = await uploadBytes(ref(storage, path), file)
+  return getDownloadURL(snap.ref)
 }
 
 /**
