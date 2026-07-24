@@ -53,15 +53,15 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
       .filter((row) => row.name.trim())
       .map((row) => ({
         name: row.name.trim(),
-        amount: row.amount === ‘’ ? null : Number(row.amount),
+        amount: row.amount === '' ? null : Number(row.amount),
         unit: row.unit.trim(),
       }))
     if (!title.trim()) {
-      setError(‘Give it a name — even “Dad’s Tuesday pasta” works.’)
+      setError("Give it a name — even \"Dad's Tuesday pasta\" works.")
       return
     }
     if (!cleanIngredients.length) {
-      setError(‘Add at least one ingredient so the grocery list can do its job.’)
+      setError('Add at least one ingredient so the grocery list can do its job.')
       return
     }
 
@@ -73,7 +73,7 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
       try {
         imageUrl = await uploadRecipeImage(user.uid, recipeId, imageFile)
       } catch {
-        setError(‘Photo upload failed — recipe was saved without it.’)
+        setError('Photo upload failed -- recipe was saved without it.')
       } finally {
         setUploading(false)
       }
@@ -87,12 +87,12 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
       categories,
       cuisine: cuisine.trim() || null,
       diets: recipe?.diets || [],
-      readyInMinutes: minutes === ‘’ ? null : Number(minutes),
-      servings: servings === ‘’ ? null : Number(servings),
-      summary: recipe?.summary || ‘’,
+      readyInMinutes: minutes === '' ? null : Number(minutes),
+      servings: servings === '' ? null : Number(servings),
+      summary: recipe?.summary || '',
       sourceUrl: null,
       ingredients: cleanIngredients,
-      steps: stepsText.split(‘\n’).map((s) => s.trim()).filter(Boolean),
+      steps: stepsText.split('\n').map((s) => s.trim()).filter(Boolean),
       nutrition: recipe?.nutrition || null,
     })
   }
@@ -114,7 +114,7 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
               className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Grandma’s arroz con pollo"
+              placeholder="e.g. Grandma's arroz con pollo"
             />
           </div>
 
