@@ -1319,7 +1319,8 @@
   flex-wrap: wrap;
 }
 
-.picker-search .input { flex: 1; }
+.picker-search .input { flex: 1; min-width: 0; }
+.picker-cuisine { flex: 0 0 auto; width: auto; }
 .picker-search .form-error { width: 100%; margin: 0; }
 
 .picker-filter {

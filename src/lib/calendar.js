@@ -16,7 +16,22 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 export const calendarConfigured = Boolean(CLIENT_ID)
 
 let gsiPromise = null
-let cachedToken = null // { token, expiresAt }
+let cachedToken = null // { token, expiresAt } -- in-memory cache
+
+const TOKEN_STORAGE_KEY = 'wfd:cal-token'
+
+function readPersistedToken() {
+  try {
+    const raw = sessionStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!raw) return null
+    const t = JSON.parse(raw)
+    return t.expiresAt > Date.now() + 30_000 ? t : null
+  } catch { return null }
+}
+
+function writePersistedToken(t) {
+  try { sessionStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(t)) } catch {}
+}
 
 function loadGsi() {
   if (window.google?.accounts?.oauth2) return Promise.resolve()
@@ -35,9 +50,20 @@ function loadGsi() {
 
 export async function getAccessToken({ hintEmail } = {}) {
   if (!calendarConfigured) throw new Error('calendar_not_configured')
+
+  // 1. In-memory (same module lifetime)
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
     return cachedToken.token
   }
+
+  // 2. sessionStorage (survives page refreshes within the same browser tab)
+  const persisted = readPersistedToken()
+  if (persisted) {
+    cachedToken = persisted
+    return persisted.token
+  }
+
+  // 3. Full OAuth popup
   await loadGsi()
   return new Promise((resolve, reject) => {
     const client = window.google.accounts.oauth2.initTokenClient({
@@ -49,7 +75,9 @@ export async function getAccessToken({ hintEmail } = {}) {
           reject(new Error(resp.error))
           return
         }
-        cachedToken = { token: resp.access_token, expiresAt: Date.now() + (resp.expires_in || 3600) * 1000 }
+        const t = { token: resp.access_token, expiresAt: Date.now() + (resp.expires_in || 3600) * 1000 }
+        cachedToken = t
+        writePersistedToken(t)
         resolve(resp.access_token)
       },
     })
@@ -81,6 +109,7 @@ async function gcal(token, calendarId, path, { method = 'GET', body, params } = 
   })
   if (res.status === 401) {
     cachedToken = null
+    try { sessionStorage.removeItem(TOKEN_STORAGE_KEY) } catch {}
     throw new Error('calendar_auth_expired')
   }
   if (!res.ok && res.status !== 410) {

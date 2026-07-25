@@ -40,7 +40,7 @@ export default async (req: Request, context: Context) => {
     upstream.searchParams.set("includeNutrition", "true");
   } else {
     upstream = new URL(`${API_BASE}/recipes/complexSearch`);
-    const allowed = ["query", "cuisine", "diet", "type", "includeIngredients", "maxReadyTime", "offset"];
+    const allowed = ["query", "cuisine", "diet", "type", "includeIngredients", "maxReadyTime", "offset", "sort", "sortDirection"];
     for (const key of allowed) {
       const value = inUrl.searchParams.get(key);
       if (value) upstream.searchParams.set(key, value.slice(0, 200));
