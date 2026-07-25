@@ -23,14 +23,22 @@ export default async (req: Request, context: Context) => {
   }
 
   const id = context.params?.id;
+  const inUrl = new URL(req.url);
   let upstream: URL;
 
-  if (id) {
+  if (id === "extract") {
+    const recipeUrl = inUrl.searchParams.get("url");
+    if (!recipeUrl) return json({ error: "missing_url" }, 400);
+    upstream = new URL(`${API_BASE}/recipes/extract`);
+    upstream.searchParams.set("url", recipeUrl);
+    upstream.searchParams.set("forceExtraction", "true");
+    upstream.searchParams.set("analyze", "true");
+    upstream.searchParams.set("includeNutrition", "true");
+  } else if (id) {
     if (!/^\d+$/.test(id)) return json({ error: "bad_id" }, 400);
     upstream = new URL(`${API_BASE}/recipes/${id}/information`);
     upstream.searchParams.set("includeNutrition", "true");
   } else {
-    const inUrl = new URL(req.url);
     upstream = new URL(`${API_BASE}/recipes/complexSearch`);
     const allowed = ["query", "cuisine", "diet", "type", "includeIngredients", "maxReadyTime", "offset"];
     for (const key of allowed) {
@@ -60,5 +68,5 @@ export default async (req: Request, context: Context) => {
 };
 
 export const config: Config = {
-  path: ["/api/recipes", "/api/recipes/:id"],
+  path: ["/api/recipes", "/api/recipes/:id", "/api/recipes/extract"],
 };

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CATEGORY_LABELS } from '../lib/houseRecipes'
 import { uploadRecipeImage } from '../lib/storage'
+import { extractRecipeFromUrl } from '../lib/spoonacular'
 
 const EMPTY_ING = { amount: '', unit: '', name: '' }
 
@@ -24,6 +25,9 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(recipe?.image || null)
   const [uploading, setUploading] = useState(false)
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState(null)
   const [error, setError] = useState(null)
   const firstField = useRef(null)
 
@@ -39,6 +43,32 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
 
   const setIng = (i, field, value) =>
     setIngredients((list) => list.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)))
+
+  const handleImport = async () => {
+    if (!importUrl.trim()) return
+    setImporting(true)
+    setImportError(null)
+    try {
+      const r = await extractRecipeFromUrl(importUrl.trim())
+      setTitle(r.title || '')
+      setMinutes(r.readyInMinutes ?? '')
+      setServings(r.servings ?? '')
+      setCuisine(r.cuisine || '')
+      setCategories(r.categories || [])
+      setIngredients(
+        r.ingredients?.length
+          ? r.ingredients.map((i) => ({ amount: i.amount ?? '', unit: i.unit || '', name: i.name || '' }))
+          : [{ ...EMPTY_ING }]
+      )
+      setStepsText((r.steps || []).join('\n'))
+      if (r.image) setImagePreview(r.image)
+      setImportUrl('')
+    } catch {
+      setImportError('Could not import that URL. Try a different recipe site or enter the recipe manually.')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0]
@@ -106,6 +136,31 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
         <h2>{editing ? 'Edit recipe' : 'Add to your recipe book'}</h2>
 
         <form onSubmit={submit} className="editor-form">
+          {!editing && (
+            <div className="editor-import">
+              <div className="editor-import-row">
+                <input
+                  type="url"
+                  className="input editor-import-input"
+                  placeholder="Paste a recipe URL to import..."
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleImport())}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleImport}
+                  disabled={importing || !importUrl.trim()}
+                >
+                  {importing ? 'Importing...' : 'Import'}
+                </button>
+              </div>
+              {importError && <p className="form-error">{importError}</p>}
+              {importUrl === '' && <p className="editor-import-hint">Or fill in the form below manually.</p>}
+            </div>
+          )}
+
           <div className="field">
             <label htmlFor="re-title">Name</label>
             <input

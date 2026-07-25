@@ -96,3 +96,9 @@ export async function getRecipeDetail(spoonacularId) {
   const data = await call(`/${spoonacularId}`)
   return normalizeRecipe(data)
 }
+
+/** Extract a recipe from an arbitrary URL via Spoonacular. */
+export async function extractRecipeFromUrl(url) {
+  const data = await call('/extract', { url })
+  return normalizeRecipe(data)
+}
