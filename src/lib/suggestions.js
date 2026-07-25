@@ -44,7 +44,9 @@ export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds =
     .sort((a, b) => b.score - a.score)
 
   const best = scored[0].score
-  const top = scored.filter((s) => s.score >= best - 1)
+  // Cast a wider net so swapping feels varied: include anything within 2 points
+  // of the best score, which typically adds 2-3 more candidates per weather mood.
+  const top = scored.filter((s) => s.score >= Math.max(0, best - 2))
 
   // Prefer recipes not used recently; fall back to all top scorers if needed.
   const fresh = top.filter((s) => !recentIds.has(s.recipe.id))

@@ -96,12 +96,12 @@ async function gcal(token, calendarId, path, { method = 'GET', body, params } = 
  * Returns count of events written.
  */
 export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18:30', durationMinutes = 60, calendarId = 'primary' } = {}) {
-  // Clear this app's previous events for the week, then write fresh.
+  // Delete all app-created events in this date range (matches regardless of
+  // which weekId tagged them, so rolling-window re-syncs clean up correctly).
+  const timeMin = new Date(`${days[0].iso}T00:00:00`).toISOString()
+  const timeMax = new Date(`${days[days.length - 1].iso}T23:59:59`).toISOString()
   const existing = await gcal(token, calendarId, '/events', {
-    params: {
-      privateExtendedProperty: `wfdWeek=${weekId}`,
-      maxResults: '50',
-    },
+    params: { timeMin, timeMax, privateExtendedProperty: 'wfdApp=1', maxResults: '50' },
   })
   for (const ev of existing?.items || []) {
     await gcal(token, calendarId, `/events/${ev.id}`, { method: 'DELETE' })

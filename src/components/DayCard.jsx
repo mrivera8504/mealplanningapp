@@ -94,7 +94,10 @@ export default function DayCard({
         {meal ? 'Another idea' : 'Weather pick'}
       </button>
       <button type="button" role="menuitem" onClick={onSuggestMine} disabled={!hasMine} title={hasMine ? undefined : 'Add recipes under Recipes → My recipes'}>
-        One of my recipes
+        Surprise me (my recipes)
+      </button>
+      <button type="button" role="menuitem" onClick={onPickRecipe}>
+        Browse and pick
       </button>
       <button type="button" role="menuitem" onClick={onTakeout}>
         Takeout…
