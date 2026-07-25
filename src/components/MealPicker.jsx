@@ -44,7 +44,7 @@ export default function MealPicker({ dayName, onPick, onClose, mine, saved }) {
       const results = await searchRecipes({ query: query.trim() })
       setSearchResults(results)
     } catch {
-      setSearchError('Search failed — check your connection and try again.')
+      setSearchError('Search failed -- check your connection and try again.')
     } finally {
       setSearching(false)
     }
@@ -62,8 +62,8 @@ export default function MealPicker({ dayName, onPick, onClose, mine, saved }) {
   const recipes = tab === 2 ? searchResults : filterRecipes(tab === 0 ? mine : saved)
 
   const emptyMessage =
-    tab === 0 ? 'No personal recipes yet — add some under Recipes.' :
-    tab === 1 ? 'No saved recipes yet — browse and save some under Recipes.' :
+    tab === 0 ? 'No personal recipes yet -- add some under Recipes.' :
+    tab === 1 ? 'No saved recipes yet -- browse and save some under Recipes.' :
     'Search above to find new recipes.'
 
   return (

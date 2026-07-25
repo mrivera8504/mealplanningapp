@@ -87,7 +87,7 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
         unit: row.unit.trim(),
       }))
     if (!title.trim()) {
-      setError("Give it a name — even \"Dad's Tuesday pasta\" works.")
+      setError("Give it a name -- even \"Dad's Tuesday pasta\" works.")
       return
     }
     if (!cleanIngredients.length) {

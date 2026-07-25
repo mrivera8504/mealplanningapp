@@ -5,7 +5,7 @@ import { moodForDay } from '../lib/weather'
 import { fmtShort, isToday } from '../lib/dates'
 
 /**
- * One day of the weekly spread — a section of the printed menu card.
+ * One day of the weekly spread -- a section of the printed menu card.
  * Supports drag & drop between days plus a tap-based "Move to…" fallback.
  * The Swap/Suggest menus offer three sources: any idea, personal recipes,
  * or a takeout suggestion.
@@ -17,7 +17,7 @@ const INVITES = {
   grill: 'Take dinner outside tonight.',
   'no-oven': 'Too hot to turn the oven on.',
   cozy: 'A stay-in, oven-on kind of night.',
-  open: 'Fair skies — anything goes.',
+  open: 'Fair skies -- anything goes.',
 }
 
 /** Small dropdown that closes on outside click / Escape. */
@@ -65,7 +65,7 @@ export default function DayCard({
   weatherDay,
   meal,
   busyEvents,
-  otherDays, // [{name, iso}] — targets for the Move menu
+  otherDays, // [{name, iso}] -- targets for the Move menu
   hasMine, // whether any personal recipes exist
   unit,
   onSuggest,

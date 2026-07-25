@@ -32,7 +32,7 @@ function scoreRecipe(recipe, mood) {
 /**
  * Pick a suggestion for one day.
  * pool: recipes to draw from. exclude: ids already planned this week.
- * recentIds: ids used in recent weeks — deprioritised but not blocked.
+ * recentIds: ids used in recent weeks -- deprioritised but not blocked.
  */
 export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds = new Set()) {
   const mood = moodForDay(weatherDay)

@@ -63,7 +63,7 @@ export default function WeekView({ onOpenSettings }) {
 
   const suggestMineFor = (iso) => {
     if (!mine.length) {
-      toast('Your recipe book is empty — add one under Recipes → My recipes.', 'warn')
+      toast('Your recipe book is empty -- add one under Recipes → My recipes.', 'warn')
       return
     }
     swapFor(iso, mine)
@@ -94,11 +94,11 @@ export default function WeekView({ onOpenSettings }) {
 
   const planWeekFromMine = () => {
     if (!mine.length) {
-      toast('Your recipe book is empty — add one under Recipes → My recipes.', 'warn')
+      toast('Your recipe book is empty -- add one under Recipes → My recipes.', 'warn')
       return
     }
     const added = fillWeek(mine, 'from your recipe book')
-    if (added === 0) toast('No empty nights to fill — clear a night first.')
+    if (added === 0) toast('No empty nights to fill -- clear a night first.')
   }
 
   const savePlan = async () => {
@@ -106,7 +106,7 @@ export default function WeekView({ onOpenSettings }) {
       await save()
       toast('Plan saved.')
     } catch {
-      toast('Could not save the plan — try again.', 'warn')
+      toast('Could not save the plan -- try again.', 'warn')
     }
   }
 
@@ -133,16 +133,16 @@ export default function WeekView({ onOpenSettings }) {
         days.map((d) => ({ iso: d.iso, meal: plan.days[d.iso]?.dinner })),
         { dinnerTime: settings.dinnerTime }
       )
-      toast(written ? `Plan saved — ${written} dinner${written > 1 ? 's' : ''} on your calendar.` : 'Nothing planned yet to sync.')
+      toast(written ? `Plan saved -- ${written} dinner${written > 1 ? 's' : ''} on your calendar.` : 'Nothing planned yet to sync.')
       const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso))
       setBusyNights(busy)
     } catch (err) {
-      console.error(‘Calendar sync error:’, err)
-      const msg = err?.message || ‘’
-      if (msg === ‘popup_closed’) { /* user cancelled */ }
-      else if (msg.includes(‘403’) || msg.includes(‘forbidden’)) toast(‘Calendar access denied — make sure the Google Calendar API is enabled in your Google Cloud project.’, ‘warn’)
-      else if (msg.includes(‘401’) || msg === ‘calendar_auth_expired’) toast(‘Calendar session expired — try again.’, ‘warn’)
-      else toast(`Calendar sync failed: ${msg || ‘unknown error’}`, ‘warn’)
+      console.error('Calendar sync error:', err)
+      const msg = err?.message || ''
+      if (msg === 'popup_closed') { /* user cancelled */ }
+      else if (msg.includes('403') || msg.includes('forbidden')) toast('Calendar access denied -- make sure the Google Calendar API is enabled in your Google Cloud project.', 'warn')
+      else if (msg.includes('401') || msg === 'calendar_auth_expired') toast('Calendar session expired -- try again.', 'warn')
+      else toast(`Calendar sync failed: ${msg || 'unknown error'}`, 'warn')
     } finally {
       setSyncing(false)
     }
@@ -177,12 +177,12 @@ export default function WeekView({ onOpenSettings }) {
 
         <p className="week-weather-note note">
           {weatherStatus === 'ready'
-            ? `Forecast for ${location?.name || 'the demo week'} is setting tonight’s menu.`
+            ? `Forecast for ${location?.name || 'the demo week'} is setting tonight's menu.`
             : weatherStatus === 'locating' || weatherStatus === 'loading'
               ? 'Reading the sky…'
               : (
                 <>
-                  No forecast yet —{' '}
+                  No forecast yet --{' '}
                   <button type="button" className="link-inline" onClick={onOpenSettings}>
                     set your location
                   </button>{' '}
@@ -239,7 +239,7 @@ export default function WeekView({ onOpenSettings }) {
 
       {!hasAnyMeal && !loading && (
         <div className="week-empty">
-          <p className="note week-empty-line">A blank week is a good week — let’s fill it.</p>
+          <p className="note week-empty-line">A blank week is a good week -- let's fill it.</p>
           <p className="muted">
             Tap <strong>Suggest a meal</strong> on any night, or let the forecast plan the whole spread.
           </p>
@@ -268,7 +268,7 @@ export default function WeekView({ onOpenSettings }) {
           moodKey={moodForDay(forecast?.[takeoutFor.iso])?.key}
           onAccept={(meal) => {
             setMeal(takeoutFor.iso, meal)
-            toast(`${meal.title} it is — ${takeoutFor.name} is a night off.`)
+            toast(`${meal.title} it is -- ${takeoutFor.name} is a night off.`)
             setTakeoutFor(null)
           }}
           onClose={() => setTakeoutFor(null)}
