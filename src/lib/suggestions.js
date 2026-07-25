@@ -1,6 +1,20 @@
 import { HOUSE_RECIPES } from './houseRecipes'
 import { moodForDay } from './weather'
 
+const RECENT_KEY = 'wfd:recent-meals'
+const MAX_RECENT = 14
+
+export function loadRecentIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(RECENT_KEY)) || []) } catch { return new Set() }
+}
+
+export function recordRecentId(id) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(RECENT_KEY)) || []
+    localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...arr.filter((x) => x !== id)].slice(0, MAX_RECENT)))
+  } catch {}
+}
+
 /**
  * Score a recipe against a weather mood: earlier categories in the mood list
  * carry more weight, so a "soup weather" day prefers soup over baked.
@@ -17,10 +31,10 @@ function scoreRecipe(recipe, mood) {
 
 /**
  * Pick a suggestion for one day.
- * pool: recipes to draw from (saved + house). exclude: ids already planned
- * this week, so a whole week of suggestions doesn't repeat.
+ * pool: recipes to draw from. exclude: ids already planned this week.
+ * recentIds: ids used in recent weeks — deprioritised but not blocked.
  */
-export function suggestForDay(weatherDay, pool, exclude = new Set()) {
+export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds = new Set()) {
   const mood = moodForDay(weatherDay)
   const candidates = pool.filter((r) => !exclude.has(r.id))
   if (candidates.length === 0) return null
@@ -29,10 +43,13 @@ export function suggestForDay(weatherDay, pool, exclude = new Set()) {
     .map((recipe) => ({ recipe, score: scoreRecipe(recipe, mood) }))
     .sort((a, b) => b.score - a.score)
 
-  // Choose randomly among the top scorers so repeat visits feel fresh.
   const best = scored[0].score
-  const top = scored.filter((s) => s.score === best || s.score >= best - 1)
-  const pick = top[Math.floor(Math.random() * top.length)]
+  const top = scored.filter((s) => s.score >= best - 1)
+
+  // Prefer recipes not used recently; fall back to all top scorers if needed.
+  const fresh = top.filter((s) => !recentIds.has(s.recipe.id))
+  const pool_to_pick = fresh.length > 0 ? fresh : top
+  const pick = pool_to_pick[Math.floor(Math.random() * pool_to_pick.length)]
   return { recipe: pick.recipe, mood, matched: pick.score > 0 }
 }
 

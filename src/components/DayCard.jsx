@@ -74,7 +74,7 @@ export default function DayCard({
   onSwap,
   onRemove,
   onView,
-  onBrowse,
+  onPickRecipe,
   onMoveMeal, // (fromIso, toIso)
 }) {
   const [dragOver, setDragOver] = useState(false)
@@ -180,8 +180,8 @@ export default function DayCard({
           </p>
           <div className="meal-slot-actions">
             <Menu label="Suggest ▾" className="btn btn-sm btn-primary">{sourceItems}</Menu>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={onBrowse}>
-              Browse
+            <button type="button" className="btn btn-sm btn-secondary" onClick={onPickRecipe}>
+              Pick a recipe
             </button>
           </div>
         </div>

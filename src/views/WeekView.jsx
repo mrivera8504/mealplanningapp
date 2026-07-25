@@ -9,8 +9,9 @@ import { useMyRecipes } from '../hooks/useMyRecipes'
 import { useWeather } from '../hooks/useWeather'
 import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
-import { addDays, fmtWeekRange, fromISODate, weekDates, weekIdFor } from '../lib/dates'
-import { buildPool, suggestForDay } from '../lib/suggestions'
+import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates, weekIdFor } from '../lib/dates'
+import MealPicker from '../components/MealPicker'
+import { buildPool, suggestForDay, loadRecentIds, recordRecentId } from '../lib/suggestions'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
 
@@ -18,7 +19,12 @@ export default function WeekView({ onOpenSettings }) {
   const navigate = useNavigate()
   const toast = useToast()
   const { settings } = useSettings()
-  const [weekId, setWeekId] = useState(() => weekIdFor(new Date()))
+  const [weekId, setWeekId] = useState(() => {
+    const today = new Date()
+    const dayOfWeek = (today.getDay() + 6) % 7 // 0 = Mon … 6 = Sun
+    // Thursday or later: most of this week is gone, default to next week
+    return dayOfWeek >= 3 ? weekIdFor(addDays(today, 7)) : weekIdFor(today)
+  })
   const { plan, loading, setMeal, removeMeal, moveMeal, save } = usePlan(weekId)
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine } = useMyRecipes()
@@ -27,6 +33,7 @@ export default function WeekView({ onOpenSettings }) {
   const [busyNights, setBusyNights] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
+  const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
 
   const days = useMemo(() => weekDates(weekId), [weekId])
   const pool = useMemo(() => buildPool(saved, mine), [saved, mine])
@@ -35,18 +42,23 @@ export default function WeekView({ onOpenSettings }) {
   const plannedIds = () =>
     new Set(days.map((d) => plan.days[d.iso]?.dinner?.id).filter(Boolean))
 
+  const pickMeal = (iso, recipe) => {
+    setMeal(iso, recipe)
+    recordRecentId(recipe.id)
+  }
+
   const suggestFor = (iso, fromPool = pool) => {
-    const result = suggestForDay(forecast?.[iso], fromPool, plannedIds())
+    const result = suggestForDay(forecast?.[iso], fromPool, plannedIds(), loadRecentIds())
     if (!result) return
-    setMeal(iso, result.recipe)
+    pickMeal(iso, result.recipe)
   }
 
   const swapFor = (iso, fromPool = pool) => {
     const current = plan.days[iso]?.dinner
     const exclude = plannedIds()
     if (current) exclude.add(current.id)
-    const result = suggestForDay(forecast?.[iso], fromPool, exclude)
-    if (result) setMeal(iso, result.recipe)
+    const result = suggestForDay(forecast?.[iso], fromPool, exclude, loadRecentIds())
+    if (result) pickMeal(iso, result.recipe)
   }
 
   const suggestMineFor = (iso) => {
@@ -59,15 +71,17 @@ export default function WeekView({ onOpenSettings }) {
 
   const fillWeek = (fromPool, label) => {
     const exclude = plannedIds()
+    const recentIds = loadRecentIds()
     let added = 0
     for (const d of days) {
       if (plan.days[d.iso]?.dinner) continue
       // If the pool runs dry (small recipe books), allow repeats.
       const result =
-        suggestForDay(forecast?.[d.iso], fromPool, exclude) ||
+        suggestForDay(forecast?.[d.iso], fromPool, exclude, recentIds) ||
+        suggestForDay(forecast?.[d.iso], fromPool, new Set(), recentIds) ||
         suggestForDay(forecast?.[d.iso], fromPool, new Set())
       if (result) {
-        setMeal(d.iso, result.recipe)
+        pickMeal(d.iso, result.recipe)
         exclude.add(result.recipe.id)
         added += 1
       }
@@ -212,7 +226,7 @@ export default function WeekView({ onOpenSettings }) {
             onSwap={() => swapFor(d.iso)}
             onRemove={() => removeMeal(d.iso)}
             onView={() => setViewing(plan.days[d.iso]?.dinner)}
-            onBrowse={() => navigate('/recipes')}
+            onPickRecipe={() => setPickerFor({ iso: d.iso, name: d.name })}
             onMoveMeal={moveMeal}
           />
         ))}
@@ -228,6 +242,19 @@ export default function WeekView({ onOpenSettings }) {
             Plan my week around the weather
           </button>
         </div>
+      )}
+
+      {pickerFor && (
+        <MealPicker
+          dayName={pickerFor.name}
+          mine={mine}
+          saved={saved}
+          onPick={(recipe) => {
+            pickMeal(pickerFor.iso, recipe)
+            setPickerFor(null)
+          }}
+          onClose={() => setPickerFor(null)}
+        />
       )}
 
       {takeoutFor && (
