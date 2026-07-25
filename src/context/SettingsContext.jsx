@@ -5,6 +5,8 @@ const DEFAULTS = {
   location: null, // { name, region, lat, lon }
   unit: 'F',
   dinnerTime: '18:30',
+  calendarId: 'primary',
+  calendarName: null,
 }
 
 const SettingsContext = createContext(null)

@@ -8,9 +8,9 @@
  */
 
 const GSI_SRC = 'https://accounts.google.com/gsi/client'
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events'
-const API = 'https://www.googleapis.com/calendar/v3/calendars/primary'
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events'
 
+const GCAL_BASE = 'https://www.googleapis.com/calendar/v3'
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 export const calendarConfigured = Boolean(CLIENT_ID)
@@ -57,9 +57,21 @@ export async function getAccessToken({ hintEmail } = {}) {
   })
 }
 
-async function gcal(token, path, { method = 'GET', body, params } = {}) {
+export async function listCalendars(token) {
+  const res = await fetch(`${GCAL_BASE}/users/me/calendarList`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`Failed to list calendars (${res.status})`)
+  const data = await res.json()
+  return (data.items || [])
+    .filter((c) => c.accessRole === 'owner' || c.accessRole === 'writer')
+    .map((c) => ({ id: c.id, name: c.summary, primary: c.primary || false }))
+}
+
+async function gcal(token, calendarId, path, { method = 'GET', body, params } = {}) {
+  const base = `${GCAL_BASE}/calendars/${encodeURIComponent(calendarId)}`
   const qs = params ? `?${new URLSearchParams(params)}` : ''
-  const res = await fetch(`${API}${path}${qs}`, {
+  const res = await fetch(`${base}${path}${qs}`, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -83,16 +95,16 @@ async function gcal(token, path, { method = 'GET', body, params } = {}) {
  * dinnerTime "HH:MM"; prepMinutes sets a popup reminder that far ahead.
  * Returns count of events written.
  */
-export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18:30', durationMinutes = 60 } = {}) {
+export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18:30', durationMinutes = 60, calendarId = 'primary' } = {}) {
   // Clear this app's previous events for the week, then write fresh.
-  const existing = await gcal(token, '/events', {
+  const existing = await gcal(token, calendarId, '/events', {
     params: {
       privateExtendedProperty: `wfdWeek=${weekId}`,
       maxResults: '50',
     },
   })
   for (const ev of existing?.items || []) {
-    await gcal(token, `/events/${ev.id}`, { method: 'DELETE' })
+    await gcal(token, calendarId, `/events/${ev.id}`, { method: 'DELETE' })
   }
 
   const [h, m] = dinnerTime.split(':').map(Number)
@@ -103,7 +115,7 @@ export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18
     start.setHours(h, m, 0, 0)
     const end = new Date(start.getTime() + durationMinutes * 60 * 1000)
     const prep = day.meal.readyInMinutes || 30
-    await gcal(token, '/events', {
+    await gcal(token, calendarId, '/events', {
       method: 'POST',
       body: {
         summary: `Dinner: ${day.meal.title}`,
@@ -126,12 +138,12 @@ export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18
  * Which evenings already have (non-app) plans?
  * Returns { 'YYYY-MM-DD': [event summaries…] } for events overlapping 5–9 pm.
  */
-export async function fetchBusyNights(token, weekId, isoDates) {
+export async function fetchBusyNights(token, weekId, isoDates, calendarId = 'primary') {
   const timeMin = new Date(`${isoDates[0]}T00:00:00`).toISOString()
   const lastDay = new Date(`${isoDates[isoDates.length - 1]}T00:00:00`)
   lastDay.setDate(lastDay.getDate() + 1)
 
-  const data = await gcal(token, '/events', {
+  const data = await gcal(token, calendarId, '/events', {
     params: {
       timeMin,
       timeMax: lastDay.toISOString(),

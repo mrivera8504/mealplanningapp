@@ -1,7 +1,7 @@
-/* ————————————————————————————————————————————————
+/* ------------------------------------------------------------------------------------------------
    What's for Dinner · component styles
    A printed weekly menu card, not a dashboard.
-   ———————————————————————————————————————————————— */
+   ------------------------------------------------------------------------------------------------ */
 
 .app-shell {
   min-height: 100vh;
@@ -60,7 +60,7 @@
   text-underline-offset: 2px;
 }
 
-/* ————— Masthead: the menu-card header ————— */
+/* ---------- Masthead: the menu-card header ---------- */
 .masthead {
   background: var(--basil);
   color: var(--paper);
@@ -200,7 +200,7 @@
   color: var(--paper-bright);
 }
 
-/* ————— Chips ————— */
+/* ---------- Chips ---------- */
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -242,7 +242,7 @@
   border: 1px solid var(--slate);
 }
 
-/* ————— Week view ————— */
+/* ---------- Week view ---------- */
 .week-toolbar {
   display: flex;
   flex-direction: column;
@@ -306,7 +306,7 @@
   font-size: var(--text-lg);
 }
 
-/* ————— Day card: one section of the menu card ————— */
+/* ---------- Day card: one section of the menu card ---------- */
 .day-card {
   background: var(--card);
   border: 1px solid var(--rule);
@@ -452,7 +452,7 @@
   background: var(--paprika-wash);
 }
 
-/* ————— Weather badge: the stamp ————— */
+/* ---------- Weather badge: the stamp ---------- */
 .weather-badge {
   display: flex;
   flex-direction: column;
@@ -530,7 +530,7 @@
   }
 }
 
-/* ————— Recipes view ————— */
+/* ---------- Recipes view ---------- */
 .recipes-tabs {
   display: flex;
   gap: var(--sp-2);
@@ -599,7 +599,7 @@
   font-size: var(--text-lg);
 }
 
-/* ————— Recipe card ————— */
+/* ---------- Recipe card ---------- */
 .recipe-card {
   background: var(--card);
   border: 1px solid var(--rule);
@@ -665,7 +665,7 @@
   padding: 0 var(--sp-3) var(--sp-3);
 }
 
-/* ————— Modals ————— */
+/* ---------- Modals ---------- */
 .modal-scrim {
   position: fixed;
   inset: 0;
@@ -922,6 +922,11 @@
   align-self: flex-start;
 }
 
+.settings-cal-active {
+  font-weight: 700;
+  color: var(--basil);
+}
+
 /* Day picker */
 .day-picker {
   max-width: 400px;
@@ -974,7 +979,7 @@
   font-size: var(--text-xs);
 }
 
-/* ————— Grocery view ————— */
+/* ---------- Grocery view ---------- */
 .grocery-view {
   max-width: 720px;
   margin: 0 auto;
@@ -1077,7 +1082,7 @@
   flex: 1;
 }
 
-/* ————— Recipe editor ————— */
+/* ---------- Recipe editor ---------- */
 .recipe-editor {
   max-width: 620px;
 }
@@ -1250,7 +1255,7 @@
   margin-bottom: var(--sp-4);
 }
 
-/* ————— Meal picker ————— */
+/* ---------- Meal picker ---------- */
 .meal-picker {
   max-width: 560px;
   display: flex;
@@ -1393,7 +1398,7 @@
   color: var(--ink-soft);
 }
 
-/* ————— Takeout picker ————— */
+/* ---------- Takeout picker ---------- */
 .takeout-picker {
   max-width: 380px;
   text-align: center;
@@ -1428,7 +1433,7 @@
   cursor: not-allowed;
 }
 
-/* ————— Toasts ————— */
+/* ---------- Toasts ---------- */
 .toast-stack {
   position: fixed;
   bottom: var(--sp-4);
@@ -1467,7 +1472,7 @@
   }
 }
 
-/* ————— Small screens ————— */
+/* ---------- Small screens ---------- */
 @media (max-width: 720px) {
   .app-main {
     padding: var(--sp-4) var(--sp-3) var(--sp-6);
@@ -1509,7 +1514,7 @@
   }
 }
 
-/* ————— Print: the grocery list becomes a real list ————— */
+/* ---------- Print: the grocery list becomes a real list ---------- */
 @media print {
   .masthead,
   .app-footer,

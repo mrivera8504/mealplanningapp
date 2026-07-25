@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { geocodeCity } from '../lib/weather'
+import { calendarConfigured, getAccessToken, listCalendars } from '../lib/calendar'
 import { useSettings } from '../context/SettingsContext'
 import { useToast } from '../context/ToastContext'
 
@@ -9,6 +10,8 @@ export default function SettingsModal({ onClose }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
+  const [calendars, setCalendars] = useState(null)
+  const [loadingCalendars, setLoadingCalendars] = useState(false)
   const firstField = useRef(null)
 
   useEffect(() => {
@@ -18,6 +21,19 @@ export default function SettingsModal({ onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const loadCalendars = async () => {
+    setLoadingCalendars(true)
+    try {
+      const token = await getAccessToken()
+      const list = await listCalendars(token)
+      setCalendars(list)
+    } catch {
+      toast('Could not load your calendars -- try again.', 'warn')
+    } finally {
+      setLoadingCalendars(false)
+    }
+  }
+
   const search = async (e) => {
     e.preventDefault()
     if (!query.trim()) return
@@ -25,7 +41,7 @@ export default function SettingsModal({ onClose }) {
     try {
       setResults(await geocodeCity(query.trim()))
     } catch {
-      toast('Could not search locations — check your connection.', 'warn')
+      toast('Could not search locations -- check your connection.', 'warn')
     } finally {
       setSearching(false)
     }
@@ -44,7 +60,7 @@ export default function SettingsModal({ onClose }) {
           <p className="muted">
             {settings.location
               ? `Forecast for ${settings.location.name}${settings.location.region ? `, ${settings.location.region}` : ''}`
-              : 'No location set — search for your town so the forecast can pick your menu.'}
+              : 'No location set -- search for your town so the forecast can pick your menu.'}
           </p>
           <form onSubmit={search} className="settings-search">
             <input
@@ -109,6 +125,47 @@ export default function SettingsModal({ onClose }) {
             aria-label="Usual dinner time"
           />
         </section>
+
+        {calendarConfigured && (
+          <section className="settings-section">
+            <h3 className="overline">Google Calendar</h3>
+            <p className="muted">
+              {settings.calendarName
+                ? `Syncing to: ${settings.calendarName}`
+                : 'Using your primary calendar.'}
+            </p>
+            {calendars ? (
+              <ul className="settings-results">
+                {calendars.map((cal) => (
+                  <li key={cal.id}>
+                    <button
+                      type="button"
+                      className={`link-quiet${settings.calendarId === cal.id ? ' settings-cal-active' : ''}`}
+                      onClick={() => {
+                        update({ calendarId: cal.id, calendarName: cal.name })
+                        setCalendars(null)
+                        toast(`Calendar set to ${cal.name}.`)
+                      }}
+                    >
+                      {cal.name}
+                      {cal.primary && <span className="muted"> (primary)</span>}
+                      {settings.calendarId === cal.id && <span className="muted"> -- current</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={loadCalendars}
+                disabled={loadingCalendars}
+              >
+                {loadingCalendars ? 'Loading...' : 'Choose calendar'}
+              </button>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

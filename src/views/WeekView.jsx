@@ -19,12 +19,7 @@ export default function WeekView({ onOpenSettings }) {
   const navigate = useNavigate()
   const toast = useToast()
   const { settings } = useSettings()
-  const [weekId, setWeekId] = useState(() => {
-    const today = new Date()
-    const dayOfWeek = (today.getDay() + 6) % 7 // 0 = Mon … 6 = Sun
-    // Thursday or later: most of this week is gone, default to next week
-    return dayOfWeek >= 3 ? weekIdFor(addDays(today, 7)) : weekIdFor(today)
-  })
+  const [weekId, setWeekId] = useState(() => weekIdFor(new Date()))
   const { plan, loading, setMeal, removeMeal, moveMeal, save } = usePlan(weekId)
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine } = useMyRecipes()
@@ -113,7 +108,7 @@ export default function WeekView({ onOpenSettings }) {
   const checkCalendar = async () => {
     try {
       const token = await getAccessToken()
-      const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso))
+      const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso), settings.calendarId)
       setBusyNights(busy)
       const count = Object.keys(busy).length
       toast(count ? `${count} evening${count > 1 ? 's' : ''} already have plans.` : 'All evenings are free.')
@@ -131,10 +126,10 @@ export default function WeekView({ onOpenSettings }) {
         token,
         weekId,
         days.map((d) => ({ iso: d.iso, meal: plan.days[d.iso]?.dinner })),
-        { dinnerTime: settings.dinnerTime }
+        { dinnerTime: settings.dinnerTime, calendarId: settings.calendarId }
       )
       toast(written ? `Plan saved -- ${written} dinner${written > 1 ? 's' : ''} on your calendar.` : 'Nothing planned yet to sync.')
-      const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso))
+      const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso), settings.calendarId)
       setBusyNights(busy)
     } catch (err) {
       console.error('Calendar sync error:', err)
@@ -166,7 +161,7 @@ export default function WeekView({ onOpenSettings }) {
             <h2 className="week-range">{fmtWeekRange(weekId)}</h2>
             {weekId !== thisWeekId && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setWeekId(thisWeekId)}>
-                Back to this week
+                Back to today
               </button>
             )}
           </div>

@@ -1,8 +1,7 @@
-export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-/** Local-timezone ISO date (YYYY-MM-DD) — avoids the UTC shift of toISOString(). */
+/** Local-timezone ISO date (YYYY-MM-DD) -- avoids the UTC shift of toISOString(). */
 export function toISODate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -21,26 +20,17 @@ export function addDays(date, n) {
   return d
 }
 
-/** Monday of the week containing `date`. */
-export function startOfWeek(date) {
-  const d = new Date(date)
-  const shift = (d.getDay() + 6) % 7
-  d.setDate(d.getDate() - shift)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-/** Week id = ISO date of that week's Monday. */
+/** Start of the rolling 7-day window = today's date. */
 export function weekIdFor(date) {
-  return toISODate(startOfWeek(date))
+  return toISODate(date)
 }
 
-/** The seven ISO dates of the week identified by weekId. */
-export function weekDates(weekId) {
-  const monday = fromISODate(weekId)
-  return DAY_NAMES.map((name, i) => {
-    const date = addDays(monday, i)
-    return { name, iso: toISODate(date), date }
+/** Seven days starting from startIso; day names derived from the actual date. */
+export function weekDates(startIso) {
+  const start = fromISODate(startIso)
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(start, i)
+    return { name: DAY_NAMES[date.getDay()], iso: toISODate(date), date }
   })
 }
 
@@ -53,11 +43,11 @@ export function fmtShort(dateOrIso) {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
 
-export function fmtWeekRange(weekId) {
-  const monday = fromISODate(weekId)
-  const sunday = addDays(monday, 6)
-  const sameMonth = monday.getMonth() === sunday.getMonth()
+export function fmtWeekRange(startIso) {
+  const start = fromISODate(startIso)
+  const end = addDays(start, 6)
+  const sameMonth = start.getMonth() === end.getMonth()
   return sameMonth
-    ? `${MONTHS[monday.getMonth()]} ${monday.getDate()}–${sunday.getDate()}, ${sunday.getFullYear()}`
-    : `${fmtShort(monday)} – ${fmtShort(sunday)}, ${sunday.getFullYear()}`
+    ? `${MONTHS[start.getMonth()]} ${start.getDate()}--${end.getDate()}, ${end.getFullYear()}`
+    : `${fmtShort(start)} -- ${fmtShort(end)}, ${end.getFullYear()}`
 }
