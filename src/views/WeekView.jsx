@@ -136,8 +136,13 @@ export default function WeekView({ onOpenSettings }) {
       toast(written ? `Plan saved — ${written} dinner${written > 1 ? 's' : ''} on your calendar.` : 'Nothing planned yet to sync.')
       const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso))
       setBusyNights(busy)
-    } catch {
-      toast('Calendar sync didn’t go through — try again.', 'warn')
+    } catch (err) {
+      console.error(‘Calendar sync error:’, err)
+      const msg = err?.message || ‘’
+      if (msg === ‘popup_closed’) { /* user cancelled */ }
+      else if (msg.includes(‘403’) || msg.includes(‘forbidden’)) toast(‘Calendar access denied — make sure the Google Calendar API is enabled in your Google Cloud project.’, ‘warn’)
+      else if (msg.includes(‘401’) || msg === ‘calendar_auth_expired’) toast(‘Calendar session expired — try again.’, ‘warn’)
+      else toast(`Calendar sync failed: ${msg || ‘unknown error’}`, ‘warn’)
     } finally {
       setSyncing(false)
     }
