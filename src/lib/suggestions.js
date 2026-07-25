@@ -44,13 +44,23 @@ export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds =
     .sort((a, b) => b.score - a.score)
 
   const best = scored[0].score
-  // Cast a wider net so swapping feels varied: include anything within 2 points
-  // of the best score, which typically adds 2-3 more candidates per weather mood.
-  const top = scored.filter((s) => s.score >= Math.max(0, best - 2))
+  // Cast a wider net: anything within 3 points of the best score, which
+  // gives 5-6 candidates even for narrow moods like "cozy" or "soup".
+  const top = scored.filter((s) => s.score >= Math.max(0, best - 3))
 
-  // Prefer recipes not used recently; fall back to all top scorers if needed.
-  const fresh = top.filter((s) => !recentIds.has(s.recipe.id))
-  const pool_to_pick = fresh.length > 0 ? fresh : top
+  // Prefer weather-matched picks that haven't been used recently.
+  const freshTop = top.filter((s) => !recentIds.has(s.recipe.id))
+
+  let pool_to_pick
+  if (freshTop.length > 0) {
+    pool_to_pick = freshTop
+  } else {
+    // All top weather picks are in recentIds -- open up to the full candidate
+    // pool so the same handful doesn't cycle indefinitely.
+    const freshAll = scored.filter((s) => !recentIds.has(s.recipe.id))
+    pool_to_pick = freshAll.length > 0 ? freshAll : top
+  }
+
   const pick = pool_to_pick[Math.floor(Math.random() * pool_to_pick.length)]
   return { recipe: pick.recipe, mood, matched: pick.score > 0 }
 }
