@@ -9,7 +9,7 @@ import { useMyRecipes } from '../hooks/useMyRecipes'
 import { useWeather } from '../hooks/useWeather'
 import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
-import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates, weekIdFor } from '../lib/dates'
+import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates } from '../lib/dates'
 import MealPicker from '../components/MealPicker'
 import { buildPool, suggestForDay, loadRecentIds, recordRecentId } from '../lib/suggestions'
 import { moodForDay } from '../lib/weather'
@@ -19,8 +19,8 @@ export default function WeekView({ onOpenSettings }) {
   const navigate = useNavigate()
   const toast = useToast()
   const { settings } = useSettings()
-  const [weekId, setWeekId] = useState(() => weekIdFor(new Date()))
-  const { plan, loading, setMeal, removeMeal, moveMeal, save } = usePlan(weekId)
+  const [startIso, setStartIso] = useState(() => toISODate(new Date()))
+  const { plan, loading, setMeal, removeMeal, moveMeal, save } = usePlan()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine } = useMyRecipes()
   const { forecast, status: weatherStatus, location, unit } = useWeather()
@@ -30,9 +30,9 @@ export default function WeekView({ onOpenSettings }) {
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
   const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
 
-  const days = useMemo(() => weekDates(weekId), [weekId])
+  const days = useMemo(() => weekDates(startIso), [startIso])
   const pool = useMemo(() => buildPool(saved, mine), [saved, mine])
-  const thisWeekId = weekIdFor(new Date())
+  const todayIso = toISODate(new Date())
 
   const plannedIds = () =>
     new Set(days.map((d) => plan.days[d.iso]?.dinner?.id).filter(Boolean))
@@ -108,7 +108,7 @@ export default function WeekView({ onOpenSettings }) {
   const checkCalendar = async () => {
     try {
       const token = await getAccessToken()
-      const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso), settings.calendarId)
+      const busy = await fetchBusyNights(token, startIso, days.map((d) => d.iso), settings.calendarId)
       setBusyNights(busy)
       const count = Object.keys(busy).length
       toast(count ? `${count} evening${count > 1 ? 's' : ''} already have plans.` : 'All evenings are free.')
@@ -124,12 +124,12 @@ export default function WeekView({ onOpenSettings }) {
       await save()
       const written = await pushWeekToCalendar(
         token,
-        weekId,
+        startIso,
         days.map((d) => ({ iso: d.iso, meal: plan.days[d.iso]?.dinner })),
         { dinnerTime: settings.dinnerTime, calendarId: settings.calendarId }
       )
       toast(written ? `Plan saved -- ${written} dinner${written > 1 ? 's' : ''} on your calendar.` : 'Nothing planned yet to sync.')
-      const busy = await fetchBusyNights(token, weekId, days.map((d) => d.iso), settings.calendarId)
+      const busy = await fetchBusyNights(token, startIso, days.map((d) => d.iso), settings.calendarId)
       setBusyNights(busy)
     } catch (err) {
       console.error('Calendar sync error:', err)
@@ -145,7 +145,7 @@ export default function WeekView({ onOpenSettings }) {
 
   const shiftWeek = (delta) => {
     setBusyNights(null)
-    setWeekId(weekIdFor(addDays(fromISODate(weekId), delta * 7)))
+    setStartIso(toISODate(addDays(fromISODate(startIso), delta * 7)))
   }
 
   const hasAnyMeal = days.some((d) => plan.days[d.iso]?.dinner)
@@ -158,9 +158,9 @@ export default function WeekView({ onOpenSettings }) {
             ←
           </button>
           <div className="week-heading">
-            <h2 className="week-range">{fmtWeekRange(weekId)}</h2>
-            {weekId !== thisWeekId && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setWeekId(thisWeekId)}>
+            <h2 className="week-range">{fmtWeekRange(startIso)}</h2>
+            {startIso !== todayIso && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStartIso(todayIso)}>
                 Back to today
               </button>
             )}

@@ -20,9 +20,12 @@ export function addDays(date, n) {
   return d
 }
 
-/** Start of the rolling 7-day window = today's date. */
+/** Monday of the week containing date — stable storage key for the whole week. */
 export function weekIdFor(date) {
-  return toISODate(date)
+  const d = new Date(date)
+  const day = d.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+  return toISODate(d)
 }
 
 /** Seven days starting from startIso; day names derived from the actual date. */

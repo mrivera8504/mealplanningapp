@@ -8,7 +8,6 @@ import {
 } from 'firebase/auth'
 import { auth, firebaseReady, googleProvider } from '../lib/firebase'
 import { makeRepo, migrateLocalToCloud } from '../lib/storage'
-import { weekIdFor } from '../lib/dates'
 
 const AuthContext = createContext(null)
 
@@ -24,7 +23,7 @@ export function AuthProvider({ children }) {
       const nextRepo = makeRepo(u)
       if (u) {
         try {
-          await migrateLocalToCloud(nextRepo, weekIdFor(new Date()))
+          await migrateLocalToCloud(nextRepo)
         } catch {
           /* migration is best-effort */
         }

@@ -10,7 +10,7 @@ import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
 import { searchRecipes } from '../lib/spoonacular'
-import { weekDates, weekIdFor } from '../lib/dates'
+import { toISODate, weekDates } from '../lib/dates'
 
 const CUISINES = ['', 'American', 'Chinese', 'French', 'Greek', 'Indian', 'Italian', 'Japanese', 'Mediterranean', 'Mexican', 'Middle Eastern', 'Spanish', 'Thai', 'Vietnamese']
 const DIETS = ['', 'vegetarian', 'vegan', 'gluten free', 'ketogenic', 'pescetarian']
@@ -34,9 +34,9 @@ export default function RecipesView() {
   const toast = useToast()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine, upsertMine, removeMine } = useMyRecipes()
-  const weekId = weekIdFor(new Date())
-  const { plan, setMeal } = usePlan(weekId)
-  const days = useMemo(() => weekDates(weekId), [weekId])
+  const startIso = toISODate(new Date()) // same rolling 7-day window as WeekView
+  const { plan, setMeal } = usePlan()
+  const days = useMemo(() => weekDates(startIso), [startIso])
 
   const [tab, setTab] = useState('find') // find | saved | house
   const [query, setQuery] = useState('')

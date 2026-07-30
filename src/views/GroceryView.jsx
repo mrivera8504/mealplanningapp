@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { usePlan } from '../hooks/usePlan'
 import { buildGroceryItems } from '../lib/grocery'
-import { fmtWeekRange, weekDates, weekIdFor } from '../lib/dates'
+import { fmtWeekRange, toISODate, weekDates, weekIdFor } from '../lib/dates'
 
 /**
  * Grocery list for the current week. The generated list is derived from the
@@ -13,25 +13,26 @@ import { fmtWeekRange, weekDates, weekIdFor } from '../lib/dates'
 export default function GroceryView() {
   const toast = useToast()
   const { repo } = useAuth()
-  const weekId = weekIdFor(new Date())
-  const { plan, loading } = usePlan(weekId)
+  const startIso = toISODate(new Date())       // rolling window start for display
+  const groceryKey = weekIdFor(new Date())     // stable Monday key for checked-state storage
+  const { plan, loading } = usePlan()
   const [state, setState] = useState({ checked: {}, extras: [] })
   const [stateLoaded, setStateLoaded] = useState(false)
   const [newItem, setNewItem] = useState('')
 
   const meals = useMemo(
     () =>
-      weekDates(weekId)
+      weekDates(startIso)
         .map((d) => plan.days[d.iso]?.dinner)
         .filter(Boolean),
-    [plan, weekId]
+    [plan, startIso]
   )
 
   const items = useMemo(() => buildGroceryItems(meals), [meals])
 
   useEffect(() => {
     let alive = true
-    repo.loadGrocery(weekId).then((g) => {
+    repo.loadGrocery(groceryKey).then((g) => {
       if (!alive) return
       if (g) setState({ checked: g.checked || {}, extras: g.extras || [] })
       setStateLoaded(true)
@@ -39,11 +40,11 @@ export default function GroceryView() {
     return () => {
       alive = false
     }
-  }, [repo, weekId])
+  }, [repo, groceryKey])
 
   const persist = (next) => {
     setState(next)
-    repo.saveGrocery(weekId, next)
+    repo.saveGrocery(groceryKey, next)
   }
 
   const toggle = (key) => {
@@ -79,7 +80,7 @@ export default function GroceryView() {
       <header className="grocery-head">
         <div>
           <h2>Grocery list</h2>
-          <p className="mono grocery-week">{fmtWeekRange(weekId)}</p>
+          <p className="mono grocery-week">{fmtWeekRange(startIso)}</p>
         </div>
         {allRows.length > 0 && (
           <div className="grocery-head-side">

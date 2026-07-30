@@ -143,7 +143,6 @@ export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18
     const start = new Date(`${day.iso}T00:00:00`)
     start.setHours(h, m, 0, 0)
     const end = new Date(start.getTime() + durationMinutes * 60 * 1000)
-    const prep = day.meal.readyInMinutes || 30
     await gcal(token, calendarId, '/events', {
       method: 'POST',
       body: {
@@ -151,10 +150,7 @@ export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18
         description: `Planned with What's for Dinner.${day.meal.sourceUrl ? `\nRecipe: ${day.meal.sourceUrl}` : ''}`,
         start: { dateTime: start.toISOString() },
         end: { dateTime: end.toISOString() },
-        reminders: {
-          useDefault: false,
-          overrides: [{ method: 'popup', minutes: prep }],
-        },
+        reminders: { useDefault: false, overrides: [] },
         extendedProperties: { private: { wfdWeek: weekId, wfdApp: '1' } },
       },
     })

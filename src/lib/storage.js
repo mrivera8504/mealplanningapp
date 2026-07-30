@@ -7,6 +7,10 @@ import { db, storage } from './firebase'
  *  - signed in  → Firestore under users/{uid}/…
  *  - signed out → localStorage ("notebook mode"), so the app is fully usable
  *    before an account exists.
+ *
+ * The meal plan is stored as a single document keyed 'current' (cloud) or
+ * 'plan' (localStorage). It accumulates meals indexed by date and never
+ * rotates, so there is no key-change data loss.
  */
 
 const LS_PREFIX = 'wfd:'
@@ -28,7 +32,6 @@ function lsSet(key, value) {
   }
 }
 
-
 const userDoc = (uid, ...path) => doc(db, 'users', uid, ...path)
 
 export function makeRepo(user) {
@@ -36,12 +39,18 @@ export function makeRepo(user) {
     const uid = user.uid
     return {
       cloud: true,
-      async loadPlan(weekId) {
-        const snap = await getDoc(userDoc(uid, 'plans', weekId))
+      async loadPlan() {
+        const snap = await getDoc(userDoc(uid, 'plans', 'current'))
         return snap.exists() ? snap.data() : null
       },
-      async savePlan(weekId, plan) {
-        await setDoc(userDoc(uid, 'plans', weekId), plan)
+      async loadLegacyPlans() {
+        const snap = await getDocs(collection(db, 'users', uid, 'plans'))
+        return snap.docs
+          .filter((d) => d.id !== 'current')
+          .map((d) => ({ key: d.id, data: d.data() }))
+      },
+      async savePlan(plan) {
+        await setDoc(userDoc(uid, 'plans', 'current'), plan)
       },
       async loadSavedRecipes() {
         const snap = await getDocs(collection(db, 'users', uid, 'savedRecipes'))
@@ -82,11 +91,25 @@ export function makeRepo(user) {
 
   return {
     cloud: false,
-    async loadPlan(weekId) {
-      return lsGet(`plan:${weekId}`)
+    async loadPlan() {
+      return lsGet('plan')
     },
-    async savePlan(weekId, plan) {
-      lsSet(`plan:${weekId}`, plan)
+    async loadLegacyPlans() {
+      const out = []
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)
+          if (!k || !k.startsWith(`${LS_PREFIX}plan:`)) continue
+          const data = lsGet(k.slice(LS_PREFIX.length))
+          if (data) out.push({ key: k.slice(`${LS_PREFIX}plan:`.length), data })
+        }
+      } catch {
+        /* storage blocked — treat as no legacy data */
+      }
+      return out
+    },
+    async savePlan(plan) {
+      lsSet('plan', plan)
     },
     async loadSavedRecipes() {
       return lsGet('saved') || []
@@ -141,10 +164,11 @@ export async function uploadRecipeImage(uid, recipeId, file) {
  * One-time hand-off when someone signs in after planning as a guest:
  * copy local data into the cloud wherever the cloud copy is empty.
  */
-export async function migrateLocalToCloud(cloudRepo, weekId) {
+export async function migrateLocalToCloud(cloudRepo) {
   const localRepo = makeRepo(null)
-  const [localPlan, cloudPlan] = await Promise.all([localRepo.loadPlan(weekId), cloudRepo.loadPlan(weekId)])
-  if (localPlan && !cloudPlan) await cloudRepo.savePlan(weekId, localPlan)
+
+  const [localPlan, cloudPlan] = await Promise.all([localRepo.loadPlan(), cloudRepo.loadPlan()])
+  if (localPlan && !cloudPlan) await cloudRepo.savePlan(localPlan)
 
   const [localSaved, cloudSaved] = await Promise.all([localRepo.loadSavedRecipes(), cloudRepo.loadSavedRecipes()])
   if (localSaved.length && !cloudSaved.length) {
