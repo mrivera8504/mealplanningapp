@@ -84,11 +84,21 @@ async function call(path, params) {
   return data
 }
 
-/** Search; params: {query, cuisine, diet, type, includeIngredients, maxReadyTime} */
+/** How many results the proxy returns per call — keep in sync with netlify/functions/spoonacular.mts. */
+export const RECIPE_PAGE_SIZE = 12
+
+/**
+ * Search; params: {query, cuisine, diet, type, includeIngredients, maxReadyTime, offset}.
+ * Returns { recipes, totalResults } — pass an increasing `offset` (multiples of
+ * RECIPE_PAGE_SIZE) to page through the full result set.
+ */
 export async function searchRecipes(params) {
   const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v))
   const data = await call('', clean)
-  return (data.results || []).map(normalizeRecipe)
+  return {
+    recipes: (data.results || []).map(normalizeRecipe),
+    totalResults: data.totalResults ?? 0,
+  }
 }
 
 /** Full detail (nutrition + complete ingredients/steps). */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import RecipeCard from '../components/RecipeCard'
 import RecipeDetail from '../components/RecipeDetail'
 import RecipeEditor from '../components/RecipeEditor'
@@ -9,7 +9,7 @@ import { usePlan } from '../hooks/usePlan'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
-import { searchRecipes } from '../lib/spoonacular'
+import { searchRecipes, RECIPE_PAGE_SIZE } from '../lib/spoonacular'
 import { toISODate, weekDates } from '../lib/dates'
 
 const CUISINES = ['', 'American', 'Chinese', 'French', 'Greek', 'Indian', 'Italian', 'Japanese', 'Mediterranean', 'Mexican', 'Middle Eastern', 'Spanish', 'Thai', 'Vietnamese']
@@ -46,8 +46,12 @@ export default function RecipesView() {
   const [diet, setDiet] = useState('')
   const [type, setType] = useState('')
   const [results, setResults] = useState(null)
+  const [totalResults, setTotalResults] = useState(0)
+  const [offset, setOffset] = useState(0)
   const [searching, setSearching] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [searchNote, setSearchNote] = useState(null)
+  const activeParamsRef = useRef(null)
   const [viewing, setViewing] = useState(null)
   const [placing, setPlacing] = useState(null) // recipe awaiting a day pick
   const [editing, setEditing] = useState(null) // null | 'new' | recipe
@@ -59,29 +63,46 @@ export default function RecipesView() {
     }
   }, [])
 
-  const runSearch = async (e) => {
+  const runSearch = async (e, nextOffset = 0) => {
     e?.preventDefault()
-    setSearching(true)
-    setSearchNote(null)
-    const params = {
-      query: byIngredients ? '' : query,
-      includeIngredients: byIngredients ? ingredients : '',
-      cuisine,
-      diet,
-      type,
+    let params
+    if (nextOffset === 0) {
+      params = {
+        query: byIngredients ? '' : query,
+        includeIngredients: byIngredients ? ingredients : '',
+        cuisine,
+        diet,
+        type,
+      }
+      activeParamsRef.current = params
+      setSearching(true)
+    } else {
+      params = { ...activeParamsRef.current, offset: nextOffset }
+      setLoadingMore(true)
     }
+    setSearchNote(null)
     try {
-      const found = await searchRecipes(params)
-      setResults(found)
-      if (!found.length) setSearchNote('empty')
+      const { recipes, totalResults: total } = await searchRecipes(params)
+      setResults((prev) => (nextOffset ? [...(prev || []), ...recipes] : recipes))
+      setTotalResults(total)
+      setOffset(nextOffset)
+      if (!nextOffset && !recipes.length) setSearchNote('empty')
     } catch (err) {
-      const local = searchHouse({ query, cuisine, diet, ingredients: byIngredients ? ingredients : '' })
-      setResults(local)
-      setSearchNote(err.code === 'not_configured' ? 'house-only' : 'api-down')
+      if (nextOffset) {
+        setSearchNote('api-down')
+      } else {
+        const local = searchHouse({ query, cuisine, diet, ingredients: byIngredients ? ingredients : '' })
+        setResults(local)
+        setTotalResults(local.length)
+        setSearchNote(err.code === 'not_configured' ? 'house-only' : 'api-down')
+      }
     } finally {
       setSearching(false)
+      setLoadingMore(false)
     }
   }
+
+  const handleLoadMore = () => runSearch(null, offset + RECIPE_PAGE_SIZE)
 
   const list = tab === 'saved' ? saved : tab === 'mine' ? mine : tab === 'house' ? HOUSE_RECIPES : results
 
@@ -217,27 +238,41 @@ export default function RecipesView() {
           )}
         </div>
       ) : (
-        <div className="recipes-grid">
-          {list.map((r) => (
-            <RecipeCard
-              key={r.id}
-              recipe={r}
-              saved={isSaved(r.id)}
-              onView={() => setViewing(r)}
-              onToggleSave={r.mine ? undefined : () => handleToggleSave(r)}
-              onEdit={r.mine ? () => setEditing(r) : undefined}
-              onDelete={
-                r.mine
-                  ? () => {
-                      removeMine(r.id)
-                      toast(`${r.title} removed from your recipe book.`)
-                    }
-                  : undefined
-              }
-              onAddToDay={() => setPlacing(r)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="recipes-grid">
+            {list.map((r) => (
+              <RecipeCard
+                key={r.id}
+                recipe={r}
+                saved={isSaved(r.id)}
+                onView={() => setViewing(r)}
+                onToggleSave={r.mine ? undefined : () => handleToggleSave(r)}
+                onEdit={r.mine ? () => setEditing(r) : undefined}
+                onDelete={
+                  r.mine
+                    ? () => {
+                        removeMine(r.id)
+                        toast(`${r.title} removed from your recipe book.`)
+                      }
+                    : undefined
+                }
+                onAddToDay={() => setPlacing(r)}
+              />
+            ))}
+          </div>
+          {tab === 'find' && list.length < totalResults && (
+            <div className="recipes-load-more">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {viewing && (

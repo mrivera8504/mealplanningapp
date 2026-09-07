@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { searchRecipes } from '../lib/spoonacular'
+import { searchRecipes, RECIPE_PAGE_SIZE } from '../lib/spoonacular'
 import { CATEGORY_LABELS } from '../lib/houseRecipes'
 import CategoryGlyph from './CategoryGlyph'
 
@@ -47,27 +47,45 @@ export default function MealPicker({ dayName, onPick, onClose, mine, saved }) {
   const [query, setQuery] = useState('')
   const [cuisine, setCuisine] = useState('')
   const [searchResults, setSearchResults] = useState([])
+  const [totalResults, setTotalResults] = useState(0)
+  const [offset, setOffset] = useState(0)
   const [searching, setSearching] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [searchError, setSearchError] = useState(null)
   const [filter, setFilter] = useState('')
   const popularLoadedRef = useRef(false)
+  const activeRef = useRef({ q: '', c: '' })
   const queryRef = useRef(query)
   queryRef.current = query
 
-  const runSearch = async (q, c) => {
-    setSearching(true)
+  const runSearch = async (q, c, nextOffset = 0) => {
+    if (nextOffset === 0) {
+      setSearching(true)
+      activeRef.current = { q, c }
+    } else {
+      setLoadingMore(true)
+    }
     setSearchError(null)
     try {
       const params = { sort: 'popularity', type: 'main course' }
       if (q) params.query = q
       if (c) params.cuisine = c
-      const results = await searchRecipes(params)
-      setSearchResults(results)
+      if (nextOffset) params.offset = nextOffset
+      const { recipes, totalResults: total } = await searchRecipes(params)
+      setSearchResults((prev) => (nextOffset ? [...prev, ...recipes] : recipes))
+      setTotalResults(total)
+      setOffset(nextOffset)
     } catch {
       setSearchError('Search failed -- check your connection and try again.')
     } finally {
       setSearching(false)
+      setLoadingMore(false)
     }
+  }
+
+  const handleLoadMore = () => {
+    const { q, c } = activeRef.current
+    runSearch(q, c, offset + RECIPE_PAGE_SIZE)
   }
 
   // Auto-load popular main dishes the first time the Find New tab is opened
@@ -168,9 +186,21 @@ export default function MealPicker({ dayName, onPick, onClose, mine, saved }) {
           ) : recipes.length === 0 ? (
             <p className="note picker-empty">{emptyMessage}</p>
           ) : (
-            recipes.map((recipe) => (
-              <RecipeRow key={recipe.id} recipe={recipe} onPick={onPick} />
-            ))
+            <>
+              {recipes.map((recipe) => (
+                <RecipeRow key={recipe.id} recipe={recipe} onPick={onPick} />
+              ))}
+              {tab === 2 && searchResults.length < totalResults && (
+                <button
+                  type="button"
+                  className="btn btn-ghost picker-load-more"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Loading...' : 'Load more'}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
