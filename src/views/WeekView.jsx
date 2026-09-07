@@ -29,6 +29,7 @@ export default function WeekView({ onOpenSettings }) {
   const [syncing, setSyncing] = useState(false)
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
   const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
+  const [pendingSaves, setPendingSaves] = useState({}) // iso -> recipe not yet saved/dismissed
 
   const days = useMemo(() => weekDates(startIso), [startIso])
   const pool = useMemo(() => buildPool(saved, mine), [saved, mine])
@@ -40,6 +41,53 @@ export default function WeekView({ onOpenSettings }) {
   const pickMeal = (iso, recipe) => {
     setMeal(iso, recipe)
     recordRecentId(recipe.id)
+    setPendingSaves((p) => {
+      if (!recipe.isHouseRecipe) {
+        if (!(iso in p)) return p
+        const next = { ...p }
+        delete next[iso]
+        return next
+      }
+      return { ...p, [iso]: recipe }
+    })
+  }
+
+  const saveHouseRecipe = async (iso) => {
+    const recipe = pendingSaves[iso]
+    if (!recipe) return
+    if (!isSaved(recipe.id)) await toggleSave(recipe)
+    setPendingSaves((p) => {
+      const next = { ...p }
+      delete next[iso]
+      return next
+    })
+    toast(`${recipe.title} saved to your recipes.`)
+  }
+
+  const dismissHouseRecipe = (iso) => {
+    setPendingSaves((p) => {
+      const next = { ...p }
+      delete next[iso]
+      return next
+    })
+  }
+
+  const removeMealAt = (iso) => {
+    removeMeal(iso)
+    dismissHouseRecipe(iso)
+  }
+
+  const moveMealAt = (fromIso, toIso) => {
+    moveMeal(fromIso, toIso)
+    setPendingSaves((p) => {
+      if (!(fromIso in p) && !(toIso in p)) return p
+      const next = { ...p }
+      delete next[fromIso]
+      delete next[toIso]
+      if (p[fromIso]) next[toIso] = p[fromIso]
+      if (p[toIso]) next[fromIso] = p[toIso]
+      return next
+    })
   }
 
   const suggestFor = (iso, fromPool = pool) => {
@@ -224,10 +272,13 @@ export default function WeekView({ onOpenSettings }) {
             onSuggestMine={() => suggestMineFor(d.iso)}
             onTakeout={() => setTakeoutFor({ iso: d.iso, name: d.name })}
             onSwap={() => swapFor(d.iso)}
-            onRemove={() => removeMeal(d.iso)}
+            onRemove={() => removeMealAt(d.iso)}
             onView={() => setViewing(plan.days[d.iso]?.dinner)}
             onPickRecipe={() => setPickerFor({ iso: d.iso, name: d.name })}
-            onMoveMeal={moveMeal}
+            onMoveMeal={moveMealAt}
+            pendingSave={pendingSaves[d.iso]}
+            onSaveRecipe={() => saveHouseRecipe(d.iso)}
+            onDismissSave={() => dismissHouseRecipe(d.iso)}
           />
         ))}
       </div>

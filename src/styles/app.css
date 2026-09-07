@@ -419,6 +419,28 @@
   font-size: var(--text-sm);
 }
 
+.day-card-save-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  background: var(--basil-wash);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.day-card-save-prompt .note {
+  font-size: var(--text-xs);
+  color: var(--basil-deep);
+}
+
+.day-card-save-actions {
+  display: flex;
+  gap: var(--sp-1);
+}
+
 .move-wrap {
   position: relative;
 }

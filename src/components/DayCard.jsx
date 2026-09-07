@@ -76,10 +76,14 @@ export default function DayCard({
   onView,
   onPickRecipe,
   onMoveMeal, // (fromIso, toIso)
+  pendingSave, // recipe awaiting a save/dismiss decision, if it came from the house collection
+  onSaveRecipe,
+  onDismissSave,
 }) {
   const [dragOver, setDragOver] = useState(false)
   const mood = moodForDay(weatherDay)
   const today = isToday(day.iso)
+  const showSavePrompt = pendingSave && meal?.id === pendingSave.id
 
   const handleDrop = (e) => {
     e.preventDefault()
@@ -175,6 +179,19 @@ export default function DayCard({
               ✕
             </button>
           </div>
+          {showSavePrompt && (
+            <div className="day-card-save-prompt">
+              <p className="note">Not in your saved recipes.</p>
+              <div className="day-card-save-actions">
+                <button type="button" className="btn btn-basil btn-sm" onClick={onSaveRecipe}>
+                  Save to my recipes
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={onDismissSave}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="meal-slot meal-slot-empty">

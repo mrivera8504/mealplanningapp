@@ -65,11 +65,17 @@ export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds =
   return { recipe: pick.recipe, mood, matched: pick.score > 0 }
 }
 
-/** Suggestion pool: personal recipes first, then saved, then the house collection. */
+/**
+ * Suggestion pool: personal recipes first, then saved, then the house
+ * collection. House entries are tagged `isHouseRecipe` so callers can offer
+ * to save them into the user's collection -- if a house recipe has since
+ * been saved, its saved copy wins the dedupe below and the tag drops off.
+ */
 export function buildPool(savedRecipes, myRecipes) {
   const seen = new Set()
   const pool = []
-  for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...HOUSE_RECIPES]) {
+  const houseRecipes = HOUSE_RECIPES.map((r) => ({ ...r, isHouseRecipe: true }))
+  for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...houseRecipes]) {
     if (!seen.has(r.id)) {
       seen.add(r.id)
       pool.push(r)
