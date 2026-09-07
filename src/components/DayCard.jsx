@@ -186,8 +186,8 @@ export default function DayCard({
                 <button type="button" className="btn btn-basil btn-sm" onClick={onSaveRecipe}>
                   Save to my recipes
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={onDismissSave}>
-                  Dismiss
+                <button type="button" className="btn btn-ghost btn-sm" onClick={onDismissSave} title="Never suggest this recipe again">
+                  Don't suggest again
                 </button>
               </div>
             </div>

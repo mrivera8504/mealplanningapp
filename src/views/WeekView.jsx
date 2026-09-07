@@ -11,7 +11,7 @@ import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
 import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates } from '../lib/dates'
 import MealPicker from '../components/MealPicker'
-import { buildPool, suggestForDay, loadRecentIds, recordRecentId } from '../lib/suggestions'
+import { buildPool, suggestForDay, loadRecentIds, recordRecentId, loadDismissedIds, recordDismissedId } from '../lib/suggestions'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
 
@@ -30,9 +30,10 @@ export default function WeekView({ onOpenSettings }) {
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
   const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
   const [pendingSaves, setPendingSaves] = useState({}) // iso -> recipe not yet saved/dismissed
+  const [dismissedIds, setDismissedIds] = useState(() => loadDismissedIds())
 
   const days = useMemo(() => weekDates(startIso), [startIso])
-  const pool = useMemo(() => buildPool(saved, mine), [saved, mine])
+  const pool = useMemo(() => buildPool(saved, mine, dismissedIds), [saved, mine, dismissedIds])
   const todayIso = toISODate(new Date())
 
   const plannedIds = () =>
@@ -64,17 +65,42 @@ export default function WeekView({ onOpenSettings }) {
     toast(`${recipe.title} saved to your recipes.`)
   }
 
-  const dismissHouseRecipe = (iso) => {
+  const clearPendingSave = (iso) => {
     setPendingSaves((p) => {
+      if (!(iso in p)) return p
       const next = { ...p }
       delete next[iso]
       return next
     })
   }
 
+  // "Dismiss" means never suggest this recipe again -- not just clear tonight's
+  // banner. Record it permanently, then replace tonight's pick from a pool
+  // that already excludes it (dismissedIds state won't re-render in time to
+  // use `pool` for this same call).
+  const dismissHouseRecipe = (iso) => {
+    const recipe = pendingSaves[iso]
+    clearPendingSave(iso)
+    if (!recipe) return
+
+    recordDismissedId(recipe.id)
+    setDismissedIds((prev) => new Set(prev).add(recipe.id))
+
+    const freshPool = buildPool(saved, mine, new Set([...dismissedIds, recipe.id]))
+    const exclude = plannedIds()
+    exclude.add(recipe.id)
+    const result = suggestForDay(forecast?.[iso], freshPool, exclude, loadRecentIds())
+    if (result) {
+      pickMeal(iso, result.recipe)
+    } else {
+      removeMeal(iso)
+      toast('No other house recipes fit that night -- pick one manually or add more of your own.', 'warn')
+    }
+  }
+
   const removeMealAt = (iso) => {
     removeMeal(iso)
-    dismissHouseRecipe(iso)
+    clearPendingSave(iso)
   }
 
   const moveMealAt = (fromIso, toIso) => {

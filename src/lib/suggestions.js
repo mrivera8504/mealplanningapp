@@ -3,6 +3,7 @@ import { moodForDay } from './weather'
 
 const RECENT_KEY = 'wfd:recent-meals'
 const MAX_RECENT = 14
+const DISMISSED_KEY = 'wfd:dismissed-recipes'
 
 export function loadRecentIds() {
   try { return new Set(JSON.parse(localStorage.getItem(RECENT_KEY)) || []) } catch { return new Set() }
@@ -12,6 +13,18 @@ export function recordRecentId(id) {
   try {
     const arr = JSON.parse(localStorage.getItem(RECENT_KEY)) || []
     localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...arr.filter((x) => x !== id)].slice(0, MAX_RECENT)))
+  } catch {}
+}
+
+/** House recipes the user has dismissed -- never suggested again, no expiry or cap. */
+export function loadDismissedIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY)) || []) } catch { return new Set() }
+}
+
+export function recordDismissedId(id) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DISMISSED_KEY)) || []
+    if (!arr.includes(id)) localStorage.setItem(DISMISSED_KEY, JSON.stringify([...arr, id]))
   } catch {}
 }
 
@@ -70,11 +83,13 @@ export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds =
  * collection. House entries are tagged `isHouseRecipe` so callers can offer
  * to save them into the user's collection -- if a house recipe has since
  * been saved, its saved copy wins the dedupe below and the tag drops off.
+ * `dismissedIds` drops house recipes the user has said not to suggest again;
+ * saved/personal recipes are never affected by a dismissal.
  */
-export function buildPool(savedRecipes, myRecipes) {
+export function buildPool(savedRecipes, myRecipes, dismissedIds = new Set()) {
   const seen = new Set()
   const pool = []
-  const houseRecipes = HOUSE_RECIPES.map((r) => ({ ...r, isHouseRecipe: true }))
+  const houseRecipes = HOUSE_RECIPES.filter((r) => !dismissedIds.has(r.id)).map((r) => ({ ...r, isHouseRecipe: true }))
   for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...houseRecipes]) {
     if (!seen.has(r.id)) {
       seen.add(r.id)
