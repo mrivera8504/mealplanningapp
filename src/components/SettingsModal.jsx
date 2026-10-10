@@ -116,6 +116,27 @@ export default function SettingsModal({ onClose }) {
         </section>
 
         <section className="settings-section">
+          <h3 className="overline">New ideas each week</h3>
+          <p className="muted">
+            Fresh Spoonacular recipes mixed in alongside yours. Fetched once a week; 0 turns this off.
+          </p>
+          <div className="seg" role="radiogroup" aria-label="New ideas per week">
+            {[0, 1, 2, 3].map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={(settings.newIdeasPerWeek ?? 2) === n}
+                className={`seg-btn${(settings.newIdeasPerWeek ?? 2) === n ? ' seg-btn-on' : ''}`}
+                onClick={() => update({ newIdeasPerWeek: n })}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="settings-section">
           <h3 className="overline">Dinner time (for calendar events)</h3>
           <input
             className="input mono settings-time"

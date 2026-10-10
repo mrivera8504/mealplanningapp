@@ -181,7 +181,9 @@ export default function DayCard({
           </div>
           {showSavePrompt && (
             <div className="day-card-save-prompt">
-              <p className="note">Not in your saved recipes.</p>
+              <p className="note">
+                {pendingSave.isDiscovery ? 'A new idea for you -- not in your saved recipes.' : 'Not in your saved recipes.'}
+              </p>
               <div className="day-card-save-actions">
                 <button type="button" className="btn btn-basil btn-sm" onClick={onSaveRecipe}>
                   Save to my recipes

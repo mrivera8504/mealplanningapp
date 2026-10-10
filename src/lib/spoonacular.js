@@ -112,3 +112,9 @@ export async function extractRecipeFromUrl(url) {
   const data = await call('/extract', { url })
   return normalizeRecipe(data)
 }
+
+/** A batch of random dinners for the weekly discovery mix (~1.1 quota points per call). */
+export async function fetchRandomRecipes() {
+  const data = await call('/random')
+  return (data.recipes || []).map(normalizeRecipe)
+}

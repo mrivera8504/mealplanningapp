@@ -12,6 +12,8 @@ const json = (body: unknown, status = 200) =>
  * Proxy for Spoonacular so the API key never reaches the client.
  *   GET /api/recipes?query=…&cuisine=…&diet=…&type=…&includeIngredients=…
  *   GET /api/recipes/:id            → full recipe information (with nutrition)
+ *   GET /api/recipes/random         → 10 random dinners (no nutrition: ~1.1 points;
+ *                                     the client caches the batch for a week)
  */
 export default async (req: Request, context: Context) => {
   const apiKey = Netlify.env.get("SPOONACULAR_API_KEY");
@@ -26,7 +28,12 @@ export default async (req: Request, context: Context) => {
   const inUrl = new URL(req.url);
   let upstream: URL;
 
-  if (id === "extract") {
+  if (id === "random") {
+    upstream = new URL(`${API_BASE}/recipes/random`);
+    upstream.searchParams.set("number", "10");
+    upstream.searchParams.set("include-tags", "main course");
+    upstream.searchParams.set("includeNutrition", "false");
+  } else if (id === "extract") {
     const recipeUrl = inUrl.searchParams.get("url");
     if (!recipeUrl) return json({ error: "missing_url" }, 400);
     upstream = new URL(`${API_BASE}/recipes/extract`);
@@ -62,11 +69,11 @@ export default async (req: Request, context: Context) => {
     status: 200,
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=300",
+      "Cache-Control": id === "random" ? "no-store" : "public, max-age=300",
     },
   });
 };
 
 export const config: Config = {
-  path: ["/api/recipes", "/api/recipes/:id", "/api/recipes/extract"],
+  path: ["/api/recipes", "/api/recipes/:id", "/api/recipes/extract", "/api/recipes/random"],
 };

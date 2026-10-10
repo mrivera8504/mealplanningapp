@@ -86,6 +86,20 @@ export function makeRepo(user) {
       async saveSettings(settings) {
         await setDoc(userDoc(uid, 'meta', 'settings'), settings)
       },
+      async loadRotation() {
+        const snap = await getDoc(userDoc(uid, 'meta', 'rotation'))
+        return snap.exists() ? snap.data() : null
+      },
+      async saveRotation(rotation) {
+        await setDoc(userDoc(uid, 'meta', 'rotation'), rotation)
+      },
+      async loadDiscovery() {
+        const snap = await getDoc(userDoc(uid, 'meta', 'discovery'))
+        return snap.exists() ? snap.data() : null
+      },
+      async saveDiscovery(batch) {
+        await setDoc(userDoc(uid, 'meta', 'discovery'), batch)
+      },
     }
   }
 
@@ -145,6 +159,18 @@ export function makeRepo(user) {
     async saveSettings(settings) {
       lsSet('settings', settings)
     },
+    async loadRotation() {
+      return lsGet('rotation')
+    },
+    async saveRotation(rotation) {
+      lsSet('rotation', rotation)
+    },
+    async loadDiscovery() {
+      return lsGet('discovery')
+    },
+    async saveDiscovery(batch) {
+      lsSet('discovery', batch)
+    },
   }
 }
 
@@ -179,4 +205,7 @@ export async function migrateLocalToCloud(cloudRepo) {
   if (localMine.length && !cloudMine.length) {
     await Promise.all(localMine.map((r) => cloudRepo.saveMyRecipe(r)))
   }
+
+  const [localRotation, cloudRotation] = await Promise.all([localRepo.loadRotation(), cloudRepo.loadRotation()])
+  if (localRotation && !cloudRotation) await cloudRepo.saveRotation(localRotation)
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DayCard from '../components/DayCard'
 import RecipeDetail from '../components/RecipeDetail'
@@ -9,9 +9,11 @@ import { useMyRecipes } from '../hooks/useMyRecipes'
 import { useWeather } from '../hooks/useWeather'
 import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
+import { useRotation } from '../context/RotationContext'
+import { useDiscovery } from '../hooks/useDiscovery'
 import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates } from '../lib/dates'
 import MealPicker from '../components/MealPicker'
-import { buildPool, suggestForDay, loadRecentIds, recordRecentId, loadDismissedIds, recordDismissedId } from '../lib/suggestions'
+import { buildPool, servedDates, suggestForDay } from '../lib/suggestions'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
 
@@ -30,20 +32,34 @@ export default function WeekView({ onOpenSettings }) {
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
   const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
   const [pendingSaves, setPendingSaves] = useState({}) // iso -> recipe not yet saved/dismissed
-  const [dismissedIds, setDismissedIds] = useState(() => loadDismissedIds())
+  const { prefs, setPref } = useRotation()
+  const newIdeasPerWeek = settings.newIdeasPerWeek ?? 2
+  const discovery = useDiscovery(newIdeasPerWeek > 0)
+  // iso -> ids swapped away from that night this session, so "Another idea"
+  // walks forward through the options instead of bouncing between two.
+  const swappedAway = useRef({})
 
   const days = useMemo(() => weekDates(startIso), [startIso])
-  const pool = useMemo(() => buildPool(saved, mine, dismissedIds), [saved, mine, dismissedIds])
+  const pool = useMemo(() => buildPool(saved, mine, discovery), [saved, mine, discovery])
+  const history = useMemo(() => servedDates(plan), [plan])
   const todayIso = toISODate(new Date())
 
   const plannedIds = () =>
     new Set(days.map((d) => plan.days[d.iso]?.dinner?.id).filter(Boolean))
 
+  const discoveryCount = () => days.filter((d) => plan.days[d.iso]?.dinner?.isDiscovery).length
+
+  /** Drop discovery recipes from `fromPool` once this week has its share of new ideas. */
+  const capDiscovery = (fromPool, alreadyThisWeek = discoveryCount()) =>
+    alreadyThisWeek >= newIdeasPerWeek ? fromPool.filter((r) => !r.isDiscovery) : fromPool
+
+  const suggest = (iso, fromPool, exclude, fromHistory = history) =>
+    suggestForDay(forecast?.[iso], iso, fromPool, { exclude, history: fromHistory, prefs })
+
   const pickMeal = (iso, recipe) => {
     setMeal(iso, recipe)
-    recordRecentId(recipe.id)
     setPendingSaves((p) => {
-      if (!recipe.isHouseRecipe) {
+      if (!recipe.isHouseRecipe && !recipe.isDiscovery) {
         if (!(iso in p)) return p
         const next = { ...p }
         delete next[iso]
@@ -75,26 +91,23 @@ export default function WeekView({ onOpenSettings }) {
   }
 
   // "Dismiss" means never suggest this recipe again -- not just clear tonight's
-  // banner. Record it permanently, then replace tonight's pick from a pool
-  // that already excludes it (dismissedIds state won't re-render in time to
-  // use `pool` for this same call).
+  // banner. Record it in the synced rotation prefs, then replace tonight's
+  // pick (prefs won't re-render in time for this call, so exclude it directly).
   const dismissHouseRecipe = (iso) => {
     const recipe = pendingSaves[iso]
     clearPendingSave(iso)
     if (!recipe) return
 
-    recordDismissedId(recipe.id)
-    setDismissedIds((prev) => new Set(prev).add(recipe.id))
+    setPref(recipe.id, { dismissed: true }).catch(() => {})
 
-    const freshPool = buildPool(saved, mine, new Set([...dismissedIds, recipe.id]))
     const exclude = plannedIds()
     exclude.add(recipe.id)
-    const result = suggestForDay(forecast?.[iso], freshPool, exclude, loadRecentIds())
+    const result = suggest(iso, capDiscovery(pool, discoveryCount() - (recipe.isDiscovery ? 1 : 0)), exclude)
     if (result) {
       pickMeal(iso, result.recipe)
     } else {
       removeMeal(iso)
-      toast('No other house recipes fit that night -- pick one manually or add more of your own.', 'warn')
+      toast('No other recipes fit that night -- pick one manually or add more of your own.', 'warn')
     }
   }
 
@@ -117,17 +130,25 @@ export default function WeekView({ onOpenSettings }) {
   }
 
   const suggestFor = (iso, fromPool = pool) => {
-    const result = suggestForDay(forecast?.[iso], fromPool, plannedIds(), loadRecentIds())
-    if (!result) return
-    pickMeal(iso, result.recipe)
+    const result = suggest(iso, capDiscovery(fromPool), plannedIds())
+    if (result) pickMeal(iso, result.recipe)
+    else toast('Nothing left to suggest for that night -- check snoozed recipes or add more of your own.', 'warn')
   }
 
   const swapFor = (iso, fromPool = pool) => {
     const current = plan.days[iso]?.dinner
-    const exclude = plannedIds()
-    if (current) exclude.add(current.id)
-    const result = suggestForDay(forecast?.[iso], fromPool, exclude, loadRecentIds())
+    const skipped = (swappedAway.current[iso] ||= new Set())
+    if (current) skipped.add(current.id)
+    // The night's own discovery pick doesn't count against the weekly share when swapping it out.
+    const candidates = capDiscovery(fromPool, discoveryCount() - (current?.isDiscovery ? 1 : 0))
+    let result = suggest(iso, candidates, new Set([...plannedIds(), ...skipped]))
+    if (!result && skipped.size > 1) {
+      // Every option has been passed over -- start the cycle again.
+      swappedAway.current[iso] = new Set(current ? [current.id] : [])
+      result = suggest(iso, candidates, new Set([...plannedIds(), ...swappedAway.current[iso]]))
+    }
     if (result) pickMeal(iso, result.recipe)
+    else toast('No other ideas for that night -- check snoozed recipes or add more of your own.', 'warn')
   }
 
   const suggestMineFor = (iso) => {
@@ -140,18 +161,23 @@ export default function WeekView({ onOpenSettings }) {
 
   const fillWeek = (fromPool, label) => {
     const exclude = plannedIds()
-    const recentIds = loadRecentIds()
+    let newIdeas = discoveryCount()
     let added = 0
+    // Picks made in this loop aren't in the plan state yet; track them here so
+    // freshness sees them.
+    const fillHistory = new Map([...history].map(([id, dates]) => [id, [...dates]]))
     for (const d of days) {
       if (plan.days[d.iso]?.dinner) continue
-      // If the pool runs dry (small recipe books), allow repeats.
+      const candidates = capDiscovery(fromPool, newIdeas)
+      // If the pool runs dry (small recipe books), allow repeats within the
+      // week -- freshness scoring still keeps them spread apart.
       const result =
-        suggestForDay(forecast?.[d.iso], fromPool, exclude, recentIds) ||
-        suggestForDay(forecast?.[d.iso], fromPool, new Set(), recentIds) ||
-        suggestForDay(forecast?.[d.iso], fromPool, new Set())
+        suggest(d.iso, candidates, exclude, fillHistory) || suggest(d.iso, candidates, new Set(), fillHistory)
       if (result) {
         pickMeal(d.iso, result.recipe)
         exclude.add(result.recipe.id)
+        fillHistory.set(result.recipe.id, [...(fillHistory.get(result.recipe.id) || []), d.iso])
+        if (result.recipe.isDiscovery) newIdeas += 1
         added += 1
       }
     }

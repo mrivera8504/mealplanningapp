@@ -2,6 +2,98 @@ import { useEffect, useRef, useState } from 'react'
 import CategoryGlyph from './CategoryGlyph'
 import { CATEGORY_LABELS } from '../lib/houseRecipes'
 import { getRecipeDetail } from '../lib/spoonacular'
+import { useRotation } from '../context/RotationContext'
+import { addDays, fmtShort, toISODate } from '../lib/dates'
+
+const NIGHTS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const SNOOZES = [
+  { days: 14, label: '2 weeks' },
+  { days: 30, label: 'a month' },
+  { days: 90, label: '3 months' },
+]
+
+/** How often this recipe comes up in suggestions -- favorite, snooze, fixed night, or never. */
+function RotationControls({ recipeId }) {
+  const { prefs, setPref } = useRotation()
+  const p = prefs[recipeId] || {}
+  const todayIso = toISODate(new Date())
+  const snoozed = p.snoozeUntil && p.snoozeUntil > todayIso
+  const save = (patch) => setPref(recipeId, patch).catch(() => {})
+
+  return (
+    <section className="rotation-controls" aria-label="Suggestions">
+      <h3 className="overline">In the rotation</h3>
+      {p.dismissed ? (
+        <div className="rotation-row">
+          <p className="muted">Never suggested -- you can still pick it by hand.</p>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => save({ dismissed: null })}>
+            Suggest it again
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="rotation-row">
+            <button
+              type="button"
+              className={`chip chip-toggle${p.favorite ? ' chip-on' : ''}`}
+              aria-pressed={Boolean(p.favorite)}
+              onClick={() => save({ favorite: !p.favorite })}
+            >
+              ★ Favorite
+            </button>
+            <span className="muted rotation-hint">comes around more often</span>
+          </div>
+
+          <div className="rotation-row">
+            <label className="muted" htmlFor={`night-${recipeId}`}>Only on</label>
+            <select
+              id={`night-${recipeId}`}
+              className="input rotation-select"
+              value={p.night ?? ''}
+              onChange={(e) => save({ night: e.target.value === '' ? null : Number(e.target.value) })}
+            >
+              <option value="">any night</option>
+              {NIGHTS.map((n, i) => (
+                <option key={n} value={i}>{n}s</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rotation-row">
+            {snoozed ? (
+              <>
+                <span className="muted">Snoozed until {fmtShort(p.snoozeUntil)}</span>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => save({ snoozeUntil: null })}>
+                  Wake up
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="muted">Not for a while:</span>
+                {SNOOZES.map((s) => (
+                  <button
+                    key={s.days}
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => save({ snoozeUntil: toISODate(addDays(new Date(), s.days)) })}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+
+          <div className="rotation-row">
+            <button type="button" className="btn btn-danger-ghost btn-sm" onClick={() => save({ dismissed: true })}>
+              Never suggest
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
 
 /**
  * Full-recipe modal. Spoonacular search results arrive without complete
@@ -104,6 +196,8 @@ export default function RecipeDetail({ recipe, saved, onClose, onToggleSave, onA
             <span>{full.nutrition.fat} fat</span>
           </div>
         )}
+
+        <RotationControls recipeId={recipe.id} />
 
         <footer className="recipe-detail-actions">
           <button

@@ -7,6 +7,7 @@ const DEFAULTS = {
   dinnerTime: '18:30',
   calendarId: 'primary',
   calendarName: null,
+  newIdeasPerWeek: 2, // Spoonacular discovery recipes mixed into a week; 0 turns discovery off
 }
 
 const SettingsContext = createContext(null)

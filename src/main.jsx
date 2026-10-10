@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { RotationProvider } from './context/RotationContext'
 import { ToastProvider } from './context/ToastContext'
 import './styles/tokens.css'
 import './styles/base.css'
@@ -14,9 +15,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <SettingsProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
+          <RotationProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </RotationProvider>
         </SettingsProvider>
       </AuthProvider>
     </BrowserRouter>

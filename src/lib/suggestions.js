@@ -1,96 +1,134 @@
 import { HOUSE_RECIPES } from './houseRecipes'
 import { moodForDay } from './weather'
+import { fromISODate } from './dates'
 
-const RECENT_KEY = 'wfd:recent-meals'
-const MAX_RECENT = 14
-const DISMISSED_KEY = 'wfd:dismissed-recipes'
+/**
+ * Rotation: which dinner to suggest for a given night.
+ *
+ * History comes from the plan itself (every dinner it holds, past and
+ * future, with its date) -- not a separate "recent" list -- so it syncs
+ * across devices and only counts meals that actually stayed on the plan,
+ * never ideas that were swapped away.
+ *
+ * Each eligible recipe is scored, and the best score wins:
+ *  - freshness: days since (or until) its nearest other appearance on the
+ *    plan, on a curve that climbs steeply over the first couple of weeks and
+ *    flattens out -- the backbone, so the whole book rotates before anything
+ *    repeats
+ *  - weather: multiplies freshness by up to WEATHER_BOOST -- it decides
+ *    between similarly fresh recipes but can't bring back last week's dinner
+ *  - favorite: comes back sooner than other recipes
+ *  - fixed night: a recipe pinned to a weekday wins that weekday
+ *  - a little jitter so ties don't always break the same way
+ */
 
-export function loadRecentIds() {
-  try { return new Set(JSON.parse(localStorage.getItem(RECENT_KEY)) || []) } catch { return new Set() }
+const FRESH_DAYS = 10 // freshness curve's time constant: ~63% fresh after 10 days, ~95% after a month
+const FRESH_WEIGHT = 10
+const WEATHER_BOOST = 0.3
+const TOO_SOON = 4 // days; anything closer than this is heavily penalised
+const FAVORITE_AFTER = 10 // days before a favorite starts getting its boost
+const FAVORITE_BONUS = 3
+const FIXED_NIGHT_BONUS = 20
+const JITTER = 2
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Map of recipe id -> ISO dates it's planned for, taken from the whole plan. */
+export function servedDates(plan) {
+  const out = new Map()
+  for (const [iso, day] of Object.entries(plan?.days || {})) {
+    const meal = day?.dinner
+    if (!meal?.id || meal.takeout) continue
+    if (!out.has(meal.id)) out.set(meal.id, [])
+    out.get(meal.id).push(iso)
+  }
+  return out
 }
 
-export function recordRecentId(id) {
-  try {
-    const arr = JSON.parse(localStorage.getItem(RECENT_KEY)) || []
-    localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...arr.filter((x) => x !== id)].slice(0, MAX_RECENT)))
-  } catch {}
-}
-
-/** House recipes the user has dismissed -- never suggested again, no expiry or cap. */
-export function loadDismissedIds() {
-  try { return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY)) || []) } catch { return new Set() }
-}
-
-export function recordDismissedId(id) {
-  try {
-    const arr = JSON.parse(localStorage.getItem(DISMISSED_KEY)) || []
-    if (!arr.includes(id)) localStorage.setItem(DISMISSED_KEY, JSON.stringify([...arr, id]))
-  } catch {}
+/** Days between `iso` and the nearest other night the recipe is planned; Infinity if never. */
+function gapDays(dates, iso) {
+  if (!dates?.length) return Infinity
+  const t = fromISODate(iso).getTime()
+  let best = Infinity
+  for (const d of dates) {
+    if (d === iso) continue
+    best = Math.min(best, Math.round(Math.abs(fromISODate(d).getTime() - t) / DAY_MS))
+  }
+  return best
 }
 
 /**
- * Score a recipe against a weather mood: earlier categories in the mood list
- * carry more weight, so a "soup weather" day prefers soup over baked.
+ * Whether a recipe may be suggested for `iso` at all: not dismissed, not
+ * snoozed past that date, and -- if pinned to a weekday -- only on that weekday.
  */
-function scoreRecipe(recipe, mood) {
+export function isEligible(recipe, iso, prefs) {
+  const p = prefs?.[recipe.id]
+  if (!p) return true
+  if (p.dismissed) return false
+  if (p.snoozeUntil && iso < p.snoozeUntil) return false
+  if (p.night != null && p.night !== fromISODate(iso).getDay()) return false
+  return true
+}
+
+/**
+ * Weather fit: earlier categories in the mood list carry more weight, so a
+ * "soup weather" day prefers soup over baked. Returns 0..1.
+ */
+function weatherFit(recipe, mood) {
   if (!mood) return 0
-  let score = 0
+  const n = mood.categories.length
   const cats = recipe.categories || []
+  let score = 0
   mood.categories.forEach((cat, i) => {
-    if (cats.includes(cat)) score += mood.categories.length - i
+    if (cats.includes(cat)) score += n - i
   })
-  return score
+  return score / ((n * (n + 1)) / 2)
 }
 
 /**
- * Pick a suggestion for one day.
- * pool: recipes to draw from. exclude: ids already planned this week.
- * recentIds: ids used in recent weeks -- deprioritised but not blocked.
+ * Pick a suggestion for one night.
+ * pool: recipes to draw from. exclude: ids that must not be picked (already
+ * planned this week, or just swapped away). history: from servedDates().
+ * prefs: per-recipe rotation preferences (see RotationContext).
  */
-export function suggestForDay(weatherDay, pool, exclude = new Set(), recentIds = new Set()) {
+export function suggestForDay(weatherDay, iso, pool, { exclude = new Set(), history = new Map(), prefs = {} } = {}) {
   const mood = moodForDay(weatherDay)
-  const candidates = pool.filter((r) => !exclude.has(r.id))
-  if (candidates.length === 0) return null
+  const weekday = fromISODate(iso).getDay()
 
-  const scored = candidates
-    .map((recipe) => ({ recipe, score: scoreRecipe(recipe, mood) }))
-    .sort((a, b) => b.score - a.score)
+  let best = null
+  for (const recipe of pool) {
+    if (exclude.has(recipe.id) || !isEligible(recipe, iso, prefs)) continue
+    const p = prefs[recipe.id] || {}
+    const gap = gapDays(history.get(recipe.id), iso)
+    const fit = weatherFit(recipe, mood)
 
-  const best = scored[0].score
-  // Cast a wider net: anything within 3 points of the best score, which
-  // gives 5-6 candidates even for narrow moods like "cozy" or "soup".
-  const top = scored.filter((s) => s.score >= Math.max(0, best - 3))
+    let score = (1 - Math.exp(-gap / FRESH_DAYS)) * FRESH_WEIGHT * (1 + fit * WEATHER_BOOST)
+    if (gap < TOO_SOON) score -= FRESH_WEIGHT
+    if (p.favorite && gap >= FAVORITE_AFTER) score += FAVORITE_BONUS
+    if (p.night === weekday) score += FIXED_NIGHT_BONUS
+    score += Math.random() * JITTER
 
-  // Prefer weather-matched picks that haven't been used recently.
-  const freshTop = top.filter((s) => !recentIds.has(s.recipe.id))
-
-  let pool_to_pick
-  if (freshTop.length > 0) {
-    pool_to_pick = freshTop
-  } else {
-    // All top weather picks are in recentIds -- open up to the full candidate
-    // pool so the same handful doesn't cycle indefinitely.
-    const freshAll = scored.filter((s) => !recentIds.has(s.recipe.id))
-    pool_to_pick = freshAll.length > 0 ? freshAll : top
+    if (!best || score > best.score) best = { recipe, score, fit }
   }
 
-  const pick = pool_to_pick[Math.floor(Math.random() * pool_to_pick.length)]
-  return { recipe: pick.recipe, mood, matched: pick.score > 0 }
+  if (!best) return null
+  return { recipe: best.recipe, mood, matched: best.fit > 0 }
 }
 
 /**
  * Suggestion pool: personal recipes first, then saved, then the house
- * collection. House entries are tagged `isHouseRecipe` so callers can offer
- * to save them into the user's collection -- if a house recipe has since
- * been saved, its saved copy wins the dedupe below and the tag drops off.
- * `dismissedIds` drops house recipes the user has said not to suggest again;
- * saved/personal recipes are never affected by a dismissal.
+ * collection and this week's discovery batch. House and discovery entries
+ * are tagged (`isHouseRecipe` / `isDiscovery`) so callers can offer to save
+ * them -- if one has since been saved, its saved copy wins the dedupe below
+ * and the tag drops off. Dismissed/snoozed recipes are filtered per night by
+ * suggestForDay, not here.
  */
-export function buildPool(savedRecipes, myRecipes, dismissedIds = new Set()) {
+export function buildPool(savedRecipes, myRecipes, discoveryRecipes = []) {
   const seen = new Set()
   const pool = []
-  const houseRecipes = HOUSE_RECIPES.filter((r) => !dismissedIds.has(r.id)).map((r) => ({ ...r, isHouseRecipe: true }))
-  for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...houseRecipes]) {
+  const house = HOUSE_RECIPES.map((r) => ({ ...r, isHouseRecipe: true }))
+  const discovery = (discoveryRecipes || []).map((r) => ({ ...r, isDiscovery: true }))
+  for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...house, ...discovery]) {
     if (!seen.has(r.id)) {
       seen.add(r.id)
       pool.push(r)
