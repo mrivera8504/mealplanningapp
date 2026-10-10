@@ -100,6 +100,13 @@ export function makeRepo(user) {
       async saveDiscovery(batch) {
         await setDoc(userDoc(uid, 'meta', 'discovery'), batch)
       },
+      async loadWalmart() {
+        const snap = await getDoc(userDoc(uid, 'meta', 'walmart'))
+        return snap.exists() ? snap.data() : null
+      },
+      async saveWalmart(data) {
+        await setDoc(userDoc(uid, 'meta', 'walmart'), data)
+      },
     }
   }
 
@@ -171,6 +178,12 @@ export function makeRepo(user) {
     async saveDiscovery(batch) {
       lsSet('discovery', batch)
     },
+    async loadWalmart() {
+      return lsGet('walmart')
+    },
+    async saveWalmart(data) {
+      lsSet('walmart', data)
+    },
   }
 }
 
@@ -208,4 +221,7 @@ export async function migrateLocalToCloud(cloudRepo) {
 
   const [localRotation, cloudRotation] = await Promise.all([localRepo.loadRotation(), cloudRepo.loadRotation()])
   if (localRotation && !cloudRotation) await cloudRepo.saveRotation(localRotation)
+
+  const [localWalmart, cloudWalmart] = await Promise.all([localRepo.loadWalmart(), cloudRepo.loadWalmart()])
+  if (localWalmart && !cloudWalmart) await cloudRepo.saveWalmart(localWalmart)
 }

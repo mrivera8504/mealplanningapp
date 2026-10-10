@@ -3,12 +3,17 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { usePlan } from '../hooks/usePlan'
-import { buildGroceryItems } from '../lib/grocery'
+import { useWalmartProducts } from '../hooks/useWalmartProducts'
+import WalmartPicker, { ProductLine } from '../components/WalmartPicker'
+import { buildGroceryItems, normalizeName } from '../lib/grocery'
+import { walmartCartUrl } from '../lib/walmart'
 import { fmtWeekRange, toISODate, weekDates, weekIdFor } from '../lib/dates'
 
 /**
  * Grocery list for the current week. The generated list is derived from the
- * plan; checked-off state and manual extras persist per week.
+ * plan; checked-off state and manual extras persist per week. Each item can
+ * be matched to a remembered Walmart product, and everything matched and not
+ * yet checked off can be sent to a Walmart cart in one go.
  */
 export default function GroceryView() {
   const toast = useToast()
@@ -19,6 +24,8 @@ export default function GroceryView() {
   const [state, setState] = useState({ checked: {}, extras: [] })
   const [stateLoaded, setStateLoaded] = useState(false)
   const [newItem, setNewItem] = useState('')
+  const walmart = useWalmartProducts()
+  const [pickerQueue, setPickerQueue] = useState(null)
 
   const meals = useMemo(
     () =>
@@ -70,10 +77,34 @@ export default function GroceryView() {
   }
 
   const allRows = [
-    ...items.map((it) => ({ ...it, extra: false })),
-    ...state.extras.map((x) => ({ key: x.key, name: x.name, quantities: '', recipes: [], extra: true })),
+    ...items.map((it) => ({ ...it, matchKey: it.key, extra: false })),
+    ...state.extras.map((x) => ({
+      key: x.key,
+      matchKey: normalizeName(x.name) || x.key,
+      name: x.name,
+      quantities: '',
+      recipes: [],
+      extra: true,
+    })),
   ]
   const remaining = allRows.filter((r) => !state.checked[r.key]).length
+
+  // Walmart: only items still to get count toward matching and the cart.
+  const openRows = allRows.filter((r) => !state.checked[r.key])
+  const unmatched = openRows.filter((r) => !walmart.matches[r.matchKey])
+  const cartLines = [...new Map(
+    openRows
+      .filter((r) => walmart.matches[r.matchKey]?.product)
+      .map((r) => [r.matchKey, walmart.matches[r.matchKey]])
+  ).values()].map((m) => ({ itemId: m.product.itemId, qty: m.qty }))
+
+  const openPicker = (rows) =>
+    setPickerQueue(rows.map((r) => ({ key: r.matchKey, name: r.name, quantities: r.quantities })))
+
+  const sendToCart = () => {
+    window.open(walmartCartUrl(cartLines), '_blank', 'noopener')
+    if (unmatched.length) toast(`${unmatched.length} item${unmatched.length > 1 ? 's' : ''} weren’t matched — add those by hand.`)
+  }
 
   return (
     <div className="grocery-view">
@@ -93,6 +124,16 @@ export default function GroceryView() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}>
               Print list
             </button>
+            {walmart.loaded && unmatched.length > 0 && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => openPicker(unmatched)}>
+                Match {unmatched.length} for Walmart
+              </button>
+            )}
+            {cartLines.length > 0 && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={sendToCart}>
+                Add {cartLines.length} to Walmart cart ↗
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -136,6 +177,14 @@ export default function GroceryView() {
                     ✕
                   </button>
                 )}
+                {walmart.loaded && !state.checked[row.key] && (
+                  <WalmartLine
+                    match={walmart.matches[row.matchKey]}
+                    onPick={() => openPicker([row])}
+                    onQty={(q) => walmart.setQty(row.matchKey, q)}
+                    onUndoSkip={() => walmart.forget(row.matchKey)}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -154,6 +203,55 @@ export default function GroceryView() {
           </form>
         </>
       )}
+
+      {pickerQueue && (
+        <WalmartPicker
+          queue={pickerQueue}
+          matches={walmart.matches}
+          onChoose={walmart.choose}
+          onSkip={walmart.skip}
+          onClose={() => setPickerQueue(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function WalmartLine({ match, onPick, onQty, onUndoSkip }) {
+  if (match?.skip) {
+    return (
+      <div className="grocery-walmart">
+        <span className="muted">Not from Walmart</span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onUndoSkip}>
+          Undo
+        </button>
+      </div>
+    )
+  }
+  if (match?.product) {
+    return (
+      <div className="grocery-walmart">
+        <ProductLine product={match.product} />
+        <span className="walmart-qty" aria-label="Quantity">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(match.qty - 1)} disabled={match.qty <= 1} aria-label="One fewer">
+            −
+          </button>
+          <span className="mono">{match.qty}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(match.qty + 1)} aria-label="One more">
+            +
+          </button>
+        </span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onPick}>
+          Change
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="grocery-walmart">
+      <button type="button" className="btn btn-ghost btn-sm" onClick={onPick}>
+        Match at Walmart
+      </button>
     </div>
   )
 }

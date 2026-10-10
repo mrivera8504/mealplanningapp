@@ -23,7 +23,8 @@ function normalizeUnit(unit) {
   return UNIT_ALIASES[u] || u
 }
 
-function normalizeName(name) {
+/** Also the key Walmart product matches are remembered under. */
+export function normalizeName(name) {
   return (name || '')
     .toLowerCase()
     .replace(/\(.*?\)/g, '')

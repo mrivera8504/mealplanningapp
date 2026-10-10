@@ -1136,6 +1136,135 @@
   flex: 1;
 }
 
+/* Walmart matching */
+.grocery-row {
+  flex-wrap: wrap;
+}
+
+.grocery-walmart {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-left: calc(1.05rem + var(--sp-2));
+  font-size: var(--text-sm);
+  min-width: 0;
+}
+
+.grocery-walmart .walmart-product {
+  flex: 1;
+}
+
+.walmart-product {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.walmart-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  background: white;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.walmart-product-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.walmart-product-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walmart-product-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.walmart-badge {
+  color: var(--basil);
+}
+
+.walmart-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.walmart-picker-title {
+  font-size: var(--text-xl);
+  padding-right: var(--sp-6);
+}
+
+.walmart-current {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--basil-wash);
+  border-radius: var(--radius-md);
+}
+
+.walmart-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+  padding-left: var(--sp-5);
+}
+
+.walmart-link-form {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.walmart-link-form .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.walmart-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin-top: var(--sp-1);
+}
+
+.walmart-search {
+  border-top: 1px dotted var(--rule-strong);
+  padding-top: var(--sp-3);
+}
+
+.walmart-results {
+  list-style: none;
+  padding: 0;
+  margin-top: var(--sp-3);
+}
+
+.walmart-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px dotted var(--rule);
+}
+
+.walmart-picker-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
 /* ---------- Recipe editor ---------- */
 .recipe-editor {
   max-width: 620px;
@@ -1580,6 +1709,7 @@
   .app-footer,
   .grocery-head-side,
   .grocery-add,
+  .grocery-walmart,
   .toast-stack {
     display: none !important;
   }
