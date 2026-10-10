@@ -1136,6 +1136,24 @@
   flex: 1;
 }
 
+.grocery-renamed {
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
+.grocery-rename {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.grocery-rename .input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Walmart matching */
 .grocery-row {
   flex-wrap: wrap;
@@ -1710,6 +1728,7 @@
   .grocery-head-side,
   .grocery-add,
   .grocery-walmart,
+  .grocery-edit,
   .toast-stack {
     display: none !important;
   }

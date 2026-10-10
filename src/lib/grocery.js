@@ -45,20 +45,35 @@ function fmtAmount(n) {
 }
 
 /**
- * plannedMeals: [{title, ingredients: [{name, amount, unit}]}]
- * Returns [{key, name, quantities: 'text', recipes: [titles]}] sorted by name.
+ * Where a rename is remembered: one recipe's one ingredient, so renaming
+ * "cream" to "sour cream" for a dip leaves real cream in a soup alone.
  */
-export function buildGroceryItems(plannedMeals) {
+export const renameSource = (meal, ingredientName) => `${meal.id || meal.title}::${normalizeName(ingredientName)}`
+
+/**
+ * plannedMeals: [{id, title, ingredients: [{name, amount, unit}]}]
+ * renames: { [renameSource]: 'new name' } — applied before merging, so a
+ *   renamed ingredient joins any existing item of that name.
+ * Returns [{key, name, quantities: 'text', recipes: [titles], sources: [renameSource],
+ *   renamedFrom: [original names]}] sorted by name.
+ */
+export function buildGroceryItems(plannedMeals, renames = {}) {
   const merged = new Map()
   for (const meal of plannedMeals) {
     for (const ing of meal.ingredients || []) {
-      const key = normalizeName(ing.name)
+      if (!normalizeName(ing.name)) continue
+      const source = renameSource(meal, ing.name)
+      const renamed = renames[source]
+      const name = renamed || ing.name
+      const key = normalizeName(name)
       if (!key) continue
       if (!merged.has(key)) {
-        merged.set(key, { key, name: ing.name, units: new Map(), recipes: new Set() })
+        merged.set(key, { key, name, units: new Map(), recipes: new Set(), sources: new Set(), renamedFrom: new Set() })
       }
       const item = merged.get(key)
       item.recipes.add(meal.title)
+      item.sources.add(source)
+      if (renamed) item.renamedFrom.add(ing.name)
       const unit = normalizeUnit(ing.unit)
       const amount = typeof ing.amount === 'number' ? ing.amount : parseFloat(ing.amount)
       if (!Number.isNaN(amount)) {
@@ -78,6 +93,8 @@ export function buildGroceryItems(plannedMeals) {
         .map(([unit, amt]) => (unit ? `${fmtAmount(amt)} ${unit}` : fmtAmount(amt)))
         .join(' + '),
       recipes: [...item.recipes],
+      sources: [...item.sources],
+      renamedFrom: [...item.renamedFrom],
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

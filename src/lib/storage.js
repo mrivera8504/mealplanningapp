@@ -107,6 +107,13 @@ export function makeRepo(user) {
       async saveWalmart(data) {
         await setDoc(userDoc(uid, 'meta', 'walmart'), data)
       },
+      async loadGroceryNames() {
+        const snap = await getDoc(userDoc(uid, 'meta', 'groceryNames'))
+        return snap.exists() ? snap.data() : null
+      },
+      async saveGroceryNames(data) {
+        await setDoc(userDoc(uid, 'meta', 'groceryNames'), data)
+      },
     }
   }
 
@@ -184,6 +191,12 @@ export function makeRepo(user) {
     async saveWalmart(data) {
       lsSet('walmart', data)
     },
+    async loadGroceryNames() {
+      return lsGet('groceryNames')
+    },
+    async saveGroceryNames(data) {
+      lsSet('groceryNames', data)
+    },
   }
 }
 
@@ -224,4 +237,7 @@ export async function migrateLocalToCloud(cloudRepo) {
 
   const [localWalmart, cloudWalmart] = await Promise.all([localRepo.loadWalmart(), cloudRepo.loadWalmart()])
   if (localWalmart && !cloudWalmart) await cloudRepo.saveWalmart(localWalmart)
+
+  const [localNames, cloudNames] = await Promise.all([localRepo.loadGroceryNames(), cloudRepo.loadGroceryNames()])
+  if (localNames && !cloudNames) await cloudRepo.saveGroceryNames(localNames)
 }

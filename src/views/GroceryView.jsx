@@ -26,6 +26,8 @@ export default function GroceryView() {
   const [newItem, setNewItem] = useState('')
   const walmart = useWalmartProducts()
   const [pickerQueue, setPickerQueue] = useState(null)
+  const [renames, setRenames] = useState({})
+  const [editing, setEditing] = useState(null) // { key, draft }
 
   const meals = useMemo(
     () =>
@@ -35,7 +37,15 @@ export default function GroceryView() {
     [plan, startIso]
   )
 
-  const items = useMemo(() => buildGroceryItems(meals), [meals])
+  const items = useMemo(() => buildGroceryItems(meals, renames), [meals, renames])
+
+  useEffect(() => {
+    let alive = true
+    repo.loadGroceryNames().then((n) => alive && setRenames(n?.renames || {}))
+    return () => {
+      alive = false
+    }
+  }, [repo])
 
   useEffect(() => {
     let alive = true
@@ -71,6 +81,30 @@ export default function GroceryView() {
     persist({ checked: restChecked, extras: state.extras.filter((x) => x.key !== key) })
   }
 
+  /**
+   * Recipe items: remembered per recipe + ingredient, so the fix sticks every
+   * week that recipe is planned. Extras: just this week's entry.
+   */
+  const renameRow = (row, rawName) => {
+    setEditing(null)
+    const name = rawName.trim()
+    const newKey = normalizeName(name)
+    if (!newKey || name === row.name) return
+    if (row.extra) {
+      persist({ ...state, extras: state.extras.map((x) => (x.key === row.key ? { ...x, name } : x)) })
+      return
+    }
+    const next = { ...renames }
+    for (const source of row.sources) {
+      // Renaming back to the recipe's own wording just drops the rename.
+      if (source.endsWith(`::${newKey}`)) delete next[source]
+      else next[source] = name
+    }
+    setRenames(next)
+    repo.saveGroceryNames({ renames: next })
+    if (state.checked[row.key]) persist({ ...state, checked: { ...state.checked, [newKey]: true } })
+  }
+
   const clearChecked = () => {
     persist({ ...state, checked: {} })
     toast('List reset — everything unchecked.')
@@ -84,6 +118,8 @@ export default function GroceryView() {
       name: x.name,
       quantities: '',
       recipes: [],
+      sources: [],
+      renamedFrom: [],
       extra: true,
     })),
   ]
@@ -153,19 +189,58 @@ export default function GroceryView() {
           <ul className="grocery-list">
             {allRows.map((row) => (
               <li key={row.key} className={state.checked[row.key] ? 'grocery-row grocery-row-done' : 'grocery-row'}>
-                <label className="grocery-label">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(state.checked[row.key])}
-                    onChange={() => toggle(row.key)}
-                  />
-                  <span className="grocery-name">{row.name}</span>
-                  {row.quantities && <span className="mono grocery-qty">{row.quantities}</span>}
-                </label>
+                {editing?.key === row.key ? (
+                  <form
+                    className="grocery-rename"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      renameRow(row, editing.draft)
+                    }}
+                  >
+                    <input
+                      className="input"
+                      autoFocus
+                      value={editing.draft}
+                      onChange={(e) => setEditing({ ...editing, draft: e.target.value })}
+                      onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                      aria-label={`New name for ${row.name}`}
+                    />
+                    <button type="submit" className="btn btn-primary btn-sm">
+                      Save
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <label className="grocery-label">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(state.checked[row.key])}
+                      onChange={() => toggle(row.key)}
+                    />
+                    <span className="grocery-name">{row.name}</span>
+                    {row.renamedFrom.length > 0 && (
+                      <span className="grocery-renamed muted">was {row.renamedFrom.join(', ')}</span>
+                    )}
+                    {row.quantities && <span className="mono grocery-qty">{row.quantities}</span>}
+                  </label>
+                )}
                 {row.recipes.length > 0 && (
                   <span className="grocery-sources muted" title={row.recipes.join(' · ')}>
                     {row.recipes.length > 1 ? `${row.recipes.length} recipes` : row.recipes[0]}
                   </span>
+                )}
+                {editing?.key !== row.key && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm grocery-edit"
+                    onClick={() => setEditing({ key: row.key, draft: row.name })}
+                    aria-label={`Rename ${row.name}`}
+                    title="Rename"
+                  >
+                    ✎
+                  </button>
                 )}
                 {row.extra && (
                   <button
