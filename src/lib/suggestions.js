@@ -1,4 +1,6 @@
 import { HOUSE_RECIPES } from './houseRecipes'
+import { HOUSE_DESSERTS, HOUSE_SIDES } from './houseExtras'
+import { courseOf, mainBrings, sideKind } from './courses'
 import { moodForDay } from './weather'
 import { fromISODate, toISODate } from './dates'
 
@@ -49,14 +51,25 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const daysBetween = (isoA, isoB) =>
   Math.round(Math.abs(fromISODate(isoA).getTime() - fromISODate(isoB).getTime()) / DAY_MS)
 
-/** Map of recipe id -> ISO dates it's planned for, taken from the whole plan. */
-export function servedDates(plan) {
+/** What a day holds for one course, as a list: its dinner, its sides, or its dessert. */
+export function dishesOf(day, course = 'main') {
+  if (course === 'side') return (day?.sides || []).filter(Boolean)
+  const dish = course === 'dessert' ? day?.dessert : day?.dinner
+  return dish ? [dish] : []
+}
+
+/**
+ * Map of recipe id -> ISO dates it's planned for, taken from the whole plan.
+ * Each course keeps its own history, so sides and desserts rotate on their own.
+ */
+export function servedDates(plan, course = 'main') {
   const out = new Map()
   for (const [iso, day] of Object.entries(plan?.days || {})) {
-    const meal = day?.dinner
-    if (!meal?.id || meal.takeout) continue
-    if (!out.has(meal.id)) out.set(meal.id, [])
-    out.get(meal.id).push(iso)
+    for (const dish of dishesOf(day, course)) {
+      if (!dish?.id || dish.takeout) continue
+      if (!out.has(dish.id)) out.set(dish.id, [])
+      out.get(dish.id).push(iso)
+    }
   }
   return out
 }
@@ -163,6 +176,36 @@ function drawWeighted(shortlist, floor, rng) {
   return shortlist[shortlist.length - 1]
 }
 
+/** The part of a score every course shares: freshness, less any recent "not that one". */
+function baseScore(gap, passedOn, today) {
+  let score = (1 - Math.exp(-gap / FRESH_DAYS)) * FRESH_WEIGHT
+  if (gap < TOO_SOON) score -= FRESH_WEIGHT
+  return score - passedPenalty(passedOn, today)
+}
+
+/**
+ * Choose from scored candidates ({ score, rested, pinned? }): rested ones
+ * first, a pinned one outright, otherwise a weighted draw from the best few.
+ * Returns { pick, repeat }, or null when there's nothing (or nothing rested
+ * and `restedOnly` is set).
+ */
+function choose(candidates, { restedOnly, rng }) {
+  if (!candidates.length) return null
+  let field = candidates.filter((c) => c.rested)
+  const repeat = field.length === 0
+  if (repeat) {
+    if (restedOnly) return null
+    field = candidates
+  }
+  const pinned = field.filter((c) => c.pinned)
+  if (pinned.length) field = pinned
+
+  field.sort((a, b) => b.score - a.score)
+  const floor = field[0].score - SHORTLIST_MARGIN
+  const shortlist = field.filter((c) => c.score >= floor).slice(0, SHORTLIST_MAX)
+  return { pick: drawWeighted(shortlist, floor, rng), repeat }
+}
+
 /**
  * Pick a suggestion for one night.
  *
@@ -203,55 +246,107 @@ export function suggestForDay(
     const rested = gap >= REST_DAYS
     const fit = weatherFit(recipe, mood)
 
-    let score = (1 - Math.exp(-gap / FRESH_DAYS)) * FRESH_WEIGHT
-    if (gap < TOO_SOON) score -= FRESH_WEIGHT
-    score -= passedPenalty(p.passedOn, today)
+    let score = baseScore(gap, p.passedOn, today)
     score -= varietyPenalty(recipe, iso, nights)
     if (p.favorite && rested) score += FAVORITE_BONUS
     score += fit * WEATHER_WEIGHT
 
     candidates.push({ recipe, score, fit, rested, pinned: p.night === weekday })
   }
-  if (!candidates.length) return null
 
-  // Rested recipes always come before ones that would repeat inside REST_DAYS.
-  let field = candidates.filter((c) => c.rested)
-  const repeat = field.length === 0
-  if (repeat) {
-    if (restedOnly) return null
-    field = candidates
+  // Rested recipes come before ones that would repeat inside REST_DAYS, and a
+  // recipe pinned to this weekday wins it outright.
+  const chosen = choose(candidates, { restedOnly, rng })
+  if (!chosen) return null
+  return { recipe: chosen.pick.recipe, mood, matched: chosen.pick.fit > 0, repeat: chosen.repeat }
+}
+
+const PAIR_CUISINE_BONUS = 2 // a side from the same cuisine as the main
+const PAIR_STYLE_PENALTY = 4 // a side cooked the same way as the main (pasta beside pasta)
+const PAIR_STARCH_PENALTY = 4 // a second starch beside a main that brings its own
+const PAIR_GREENS_BONUS = 2.5 // a vegetable or salad beside a main with neither
+const PAIR_SAME_KIND_PENALTY = 5 // a second side of the same kind as one already there
+
+/**
+ * Pick a side or a dessert for one night. Sides and desserts rotate on their
+ * own history (servedDates(plan, course)) with the same freshness, rest and
+ * passed-over rules as dinners, and are never shaped by weather or weekday.
+ *
+ * Sides are also paired with the night: a bonus for matching the main's
+ * cuisine and for bringing a vegetable or salad to a main with neither; a
+ * penalty for repeating the main's cooking style, doubling up on starch, or
+ * matching the kind of a side already planned. Desserts go on freshness alone.
+ *
+ * main: the night's dinner, if any. sides: sides already on that night.
+ * Returns { recipe, repeat } or null.
+ */
+export function suggestExtra(
+  course,
+  iso,
+  pool,
+  {
+    main = null,
+    sides = [],
+    exclude = new Set(),
+    history = new Map(),
+    prefs = {},
+    restedOnly = false,
+    today = toISODate(new Date()),
+    rng = Math.random,
+  } = {}
+) {
+  const brings = mainBrings(main)
+  const mainStyle = styleOf(main)
+  const kindsPlanned = new Set(sides.map(sideKind))
+  const taken = new Set(sides.map((s) => s.id))
+
+  const candidates = []
+  for (const recipe of pool) {
+    if (exclude.has(recipe.id) || taken.has(recipe.id)) continue
+    const p = prefs[recipe.id] || {}
+    if (p.dismissed || (p.snoozeUntil && iso < p.snoozeUntil)) continue
+    const gap = gapDays(history.get(recipe.id), iso)
+    const rested = gap >= REST_DAYS
+
+    let score = baseScore(gap, p.passedOn, today)
+    if (p.favorite && rested) score += FAVORITE_BONUS
+    if (course === 'side') {
+      const kind = sideKind(recipe)
+      if (main?.cuisine && recipe.cuisine === main.cuisine) score += PAIR_CUISINE_BONUS
+      if (mainStyle && styleOf(recipe) === mainStyle) score -= PAIR_STYLE_PENALTY
+      if (kind === 'starch' && brings.starch) score -= PAIR_STARCH_PENALTY
+      if ((kind === 'vegetable' || kind === 'salad') && !brings.greens) score += PAIR_GREENS_BONUS
+      if (kind === 'salad' && brings.greens && (main?.categories || []).includes('salad')) score -= PAIR_STYLE_PENALTY
+      if (kindsPlanned.has(kind)) score -= PAIR_SAME_KIND_PENALTY
+    }
+    candidates.push({ recipe, score, rested })
   }
 
-  // A recipe pinned to this weekday wins it outright.
-  const pinned = field.filter((c) => c.pinned)
-  if (pinned.length) field = pinned
-
-  field.sort((a, b) => b.score - a.score)
-  const floor = field[0].score - SHORTLIST_MARGIN
-  const shortlist = field.filter((c) => c.score >= floor).slice(0, SHORTLIST_MAX)
-  const pick = drawWeighted(shortlist, floor, rng)
-
-  return { recipe: pick.recipe, mood, matched: pick.fit > 0, repeat }
+  const chosen = choose(candidates, { restedOnly, rng })
+  return chosen ? { recipe: chosen.pick.recipe, repeat: chosen.repeat } : null
 }
 
 /**
- * Suggestion pool: personal recipes first, then saved, then the house
- * collection and the library of outside recipes. House and library entries
- * are tagged (`isHouseRecipe` / `isDiscovery`) so callers can offer to save
- * them -- if one has since been saved, its saved copy wins the dedupe below
- * and the tag drops off. Dismissed/snoozed recipes are filtered per night by
- * suggestForDay, not here.
+ * Suggestion pool for one course: personal recipes first, then saved, then
+ * the house collection and the library of outside recipes. House and library
+ * entries are tagged (`isHouseRecipe` / `isDiscovery`) so callers can offer to
+ * save them -- if one has since been saved, its saved copy wins the dedupe
+ * below and the tag drops off. Dismissed/snoozed recipes are filtered per
+ * night by the suggest functions, not here.
+ *
+ * Only recipes of the asked-for course are returned, so a saved dessert can
+ * never be suggested for dinner.
  */
-export function buildPool(savedRecipes, myRecipes, libraryRecipes = []) {
+export function buildPool(savedRecipes, myRecipes, libraryRecipes = [], course = 'main') {
   const seen = new Set()
   const pool = []
-  const house = HOUSE_RECIPES.map((r) => ({ ...r, isHouseRecipe: true }))
+  const houseSet = course === 'side' ? HOUSE_SIDES : course === 'dessert' ? HOUSE_DESSERTS : HOUSE_RECIPES
+  const house = houseSet.map((r) => ({ ...r, isHouseRecipe: true }))
   const library = (libraryRecipes || []).map((r) => ({ ...r, isDiscovery: true }))
   for (const r of [...(myRecipes || []), ...(savedRecipes || []), ...house, ...library]) {
-    if (!seen.has(r.id)) {
-      seen.add(r.id)
-      pool.push(r)
-    }
+    if (seen.has(r.id) || courseOf(r) !== course) continue
+    seen.add(r.id)
+    pool.push(r)
   }
   return pool
 }

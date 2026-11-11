@@ -3,6 +3,7 @@ import WeatherBadge from './WeatherBadge'
 import CategoryGlyph from './CategoryGlyph'
 import { moodForDay } from '../lib/weather'
 import { fmtShort, isToday } from '../lib/dates'
+import { MAX_SIDES } from '../lib/courses'
 
 /**
  * One day of the weekly spread -- a section of the printed menu card.
@@ -10,6 +11,9 @@ import { fmtShort, isToday } from '../lib/dates'
  * The Swap/Suggest menus offer: any idea, a pick for that night's weather,
  * personal recipes, browsing, or a takeout suggestion. Weather is always
  * shown but only shapes a pick when "For this weather" is chosen.
+ * Under the dinner sit its sides (up to three) and a dessert: each can be
+ * suggested, picked or typed, swapped for another idea, or removed. They
+ * travel with the dinner when the night is moved.
  */
 
 /** Small dropdown that closes on outside click / Escape. */
@@ -52,6 +56,55 @@ function Menu({ label, className, children, disabled }) {
   )
 }
 
+/** One line of extras under the dinner: the night's sides, or its dessert. */
+function ExtraRow({ label, one, items, canAdd, onSuggest, onPick, onSwap, onRemove, onView }) {
+  return (
+    <div className="extra-row">
+      <span className="overline extra-label">{label}</span>
+      <ul className="extra-list">
+        {items.map((item) => (
+          <li key={item.id} className="extra-item">
+            {item.quick ? (
+              <span className="extra-title">{item.title}</span>
+            ) : (
+              <button type="button" className="link-quiet extra-title" onClick={() => onView(item)}>
+                {item.title}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm extra-btn"
+              onClick={() => onSwap(item)}
+              aria-label={`Another ${one} instead of ${item.title}`}
+              title={`Another ${one}`}
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger-ghost btn-sm extra-btn"
+              onClick={() => onRemove(item)}
+              aria-label={`Remove ${item.title}`}
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+      {canAdd && (
+        <Menu label={`+ ${one} ▾`} className="btn btn-ghost btn-sm extra-add">
+          <button type="button" role="menuitem" onClick={onSuggest}>
+            Suggest a {one}
+          </button>
+          <button type="button" role="menuitem" onClick={onPick}>
+            Pick or type one
+          </button>
+        </Menu>
+      )}
+    </div>
+  )
+}
+
 export default function DayCard({
   day, // { name, iso }
   weatherDay,
@@ -72,6 +125,12 @@ export default function DayCard({
   pendingSave, // recipe awaiting a save/dismiss decision, if it came from the house collection
   onSaveRecipe,
   onDismissSave,
+  sides = [],
+  dessert = null,
+  onSuggestExtra, // (course, replacing?)
+  onPickExtra, // (course)
+  onRemoveExtra, // (course, dish)
+  onViewDish, // (dish)
 }) {
   const [dragOver, setDragOver] = useState(false)
   const mood = moodForDay(weatherDay)
@@ -206,6 +265,34 @@ export default function DayCard({
               Pick a recipe
             </button>
           </div>
+        </div>
+      )}
+      {(meal || sides.length > 0 || dessert) && (
+        <div className="day-extras">
+          {!meal?.takeout && (
+            <ExtraRow
+              label="Sides"
+              one="side"
+              items={sides}
+              canAdd={sides.length < MAX_SIDES}
+              onSuggest={() => onSuggestExtra('side')}
+              onPick={() => onPickExtra('side')}
+              onSwap={(item) => onSuggestExtra('side', item)}
+              onRemove={(item) => onRemoveExtra('side', item)}
+              onView={onViewDish}
+            />
+          )}
+          <ExtraRow
+            label="Dessert"
+            one="dessert"
+            items={dessert ? [dessert] : []}
+            canAdd={!dessert}
+            onSuggest={() => onSuggestExtra('dessert')}
+            onPick={() => onPickExtra('dessert')}
+            onSwap={(item) => onSuggestExtra('dessert', item)}
+            onRemove={(item) => onRemoveExtra('dessert', item)}
+            onView={onViewDish}
+          />
         </div>
       )}
     </section>

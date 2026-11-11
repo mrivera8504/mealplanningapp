@@ -29,5 +29,14 @@ export function useSavedRecipes() {
     [repo, isSaved]
   )
 
-  return { saved, isSaved, toggleSave }
+  /** Replace a saved recipe in place (e.g. to file it under another course). */
+  const updateSaved = useCallback(
+    async (recipe) => {
+      setSaved((s) => s.map((r) => (r.id === recipe.id ? recipe : r)))
+      await repo.saveRecipe(recipe)
+    },
+    [repo]
+  )
+
+  return { saved, isSaved, toggleSave, updateSaved }
 }

@@ -32,11 +32,19 @@ describe('taste and explore', () => {
     for (let i = 0; i < 20; i++) {
       const [taste, explore] = planRefill(context)
       expect(taste.reason).toBe('taste')
+      expect(taste.type).toBe('main course')
       expect(['Thai', 'Mexican', 'Italian']).toContain(taste.cuisine)
       expect(explore.reason).toBe('explore')
       expect(CUISINES).toContain(explore.cuisine)
       expect(explore.cuisine).not.toBe(taste.cuisine)
     }
+  })
+
+  it('adds a third search that alternates between sides and desserts', () => {
+    const third = (last) => planRefill(context, Math.random, last)[2]
+    expect(third(null)).toMatchObject({ type: 'side dish', course: 'side' })
+    expect(third('side')).toMatchObject({ type: 'dessert', course: 'dessert' })
+    expect(third('dessert')).toMatchObject({ type: 'side dish', course: 'side' })
   })
 
   it('still plans a refill with no history at all', () => {

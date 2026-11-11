@@ -13,7 +13,10 @@ import { useRotation } from '../context/RotationContext'
 import { useLibrary } from '../hooks/useLibrary'
 import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates } from '../lib/dates'
 import MealPicker from '../components/MealPicker'
-import { buildPool, plannedNights, servedDates, styleOf, suggestForDay } from '../lib/suggestions'
+import { buildPool, dishesOf, plannedNights, servedDates, styleOf, suggestExtra, suggestForDay } from '../lib/suggestions'
+import { HOUSE_RECIPES } from '../lib/houseRecipes'
+import { HOUSE_DESSERTS, HOUSE_SIDES } from '../lib/houseExtras'
+import { courseInfo } from '../lib/courses'
 import { describeRefillError } from '../lib/library'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
@@ -26,7 +29,7 @@ export default function WeekView({ onOpenSettings }) {
   const toast = useToast()
   const { settings } = useSettings()
   const [startIso, setStartIso] = useState(() => toISODate(new Date()))
-  const { plan, loading, setMeal, removeMeal, moveMeal, save } = usePlan()
+  const { plan, loading, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save } = usePlan()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine } = useMyRecipes()
   const { forecast, status: weatherStatus, location, unit } = useWeather()
@@ -34,7 +37,7 @@ export default function WeekView({ onOpenSettings }) {
   const [busyNights, setBusyNights] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
-  const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
+  const [pickerFor, setPickerFor] = useState(null)   // {iso, name, course?}
   const [pendingSaves, setPendingSaves] = useState({}) // iso -> recipe not yet saved/dismissed
   // { nights } left empty because the recipe book has nothing that's rested two weeks.
   const [shortfall, setShortfall] = useState(null)
@@ -44,9 +47,20 @@ export default function WeekView({ onOpenSettings }) {
   // iso -> ids swapped away from that night this session, so "Another idea"
   // walks forward through the options instead of bouncing between two.
   const swappedAway = useRef({})
+  const swappedExtras = useRef({}) // `${iso}:${course}` -> ids swapped away this session
 
   const days = useMemo(() => weekDates(startIso), [startIso])
   const pool = useMemo(() => buildPool(saved, mine, library.recipes), [saved, mine, library.recipes])
+  // Sides and desserts have their own pools and their own history, so they
+  // rotate independently of dinners.
+  const extraPools = useMemo(
+    () => ({
+      side: buildPool(saved, mine, library.recipes, 'side'),
+      dessert: buildPool(saved, mine, library.recipes, 'dessert'),
+    }),
+    [saved, mine, library.recipes]
+  )
+  const extraHistory = useMemo(() => ({ side: servedDates(plan, 'side'), dessert: servedDates(plan, 'dessert') }), [plan])
   const history = useMemo(() => servedDates(plan), [plan])
   const nights = useMemo(() => plannedNights(plan), [plan])
   const todayIso = toISODate(new Date())
@@ -258,6 +272,97 @@ export default function WeekView({ onOpenSettings }) {
     fillWeek(fromPool, label)
   }
 
+  const weekExtraIds = (course) => new Set(days.flatMap((d) => dishesOf(plan.days[d.iso], course).map((x) => x.id)))
+
+  const placeExtra = (iso, course, recipe, replacing = null) => {
+    if (course === 'dessert') setDessert(iso, recipe)
+    else if (replacing) replaceSide(iso, replacing.id, recipe)
+    else addSide(iso, recipe)
+  }
+
+  /**
+   * Suggest a side or dessert for one night, paired with its dinner. With
+   * `replacing`, that dish is swapped out and remembered as passed over.
+   * Nothing here is ever filled in along with dinners -- only when asked.
+   */
+  const suggestExtraFor = (iso, course, replacing = null) => {
+    const day = plan.days[iso] || {}
+    const one = courseInfo(course).one
+    const skipKey = `${iso}:${course}`
+    const skipped = (swappedExtras.current[skipKey] ||= new Set())
+    if (replacing) {
+      skipped.add(replacing.id)
+      if (!replacing.quick) setPref(replacing.id, { passedOn: todayIso }).catch(() => {})
+    }
+    const base = {
+      main: day.dinner?.takeout ? null : day.dinner,
+      sides: course === 'side' ? (day.sides || []).filter((x) => x.id !== replacing?.id) : [],
+      history: extraHistory[course],
+      prefs,
+    }
+    const fromPool = extraPools[course]
+    let result =
+      suggestExtra(course, iso, fromPool, { ...base, exclude: new Set([...weekExtraIds(course), ...skipped]) }) ||
+      suggestExtra(course, iso, fromPool, { ...base, exclude: skipped })
+    if (!result && skipped.size > 1) {
+      // Every option has been passed over -- start the cycle again.
+      swappedExtras.current[skipKey] = new Set(replacing ? [replacing.id] : [])
+      result = suggestExtra(course, iso, fromPool, { ...base, exclude: swappedExtras.current[skipKey] })
+    }
+    if (result) placeExtra(iso, course, result.recipe, replacing)
+    else toast(`No other ${one} ideas -- add some under Recipes, or type one in.`, 'warn')
+  }
+
+  const removeExtra = (iso, course, dish) => {
+    if (course === 'dessert') removeDessert(iso)
+    else removeSide(iso, dish.id)
+  }
+
+  /**
+   * "Fill sides" / "Fill desserts": one for every night this week that has a
+   * dinner and doesn't have one yet. Takeout nights get no sides.
+   */
+  const fillExtras = (course) => {
+    const info = courseInfo(course)
+    const fromPool = extraPools[course]
+    const exclude = weekExtraIds(course)
+    const fillHistory = new Map([...extraHistory[course]].map(([id, dates]) => [id, [...dates]]))
+    let added = 0
+    let open = 0
+    for (const d of days) {
+      const day = plan.days[d.iso]
+      if (!day?.dinner) continue
+      if (course === 'side' ? day.dinner.takeout || day.sides?.length : day.dessert) continue
+      open += 1
+      const opts = { main: day.dinner.takeout ? null : day.dinner, history: fillHistory, prefs }
+      const result =
+        suggestExtra(course, d.iso, fromPool, { ...opts, exclude }) || suggestExtra(course, d.iso, fromPool, opts)
+      if (!result) continue
+      placeExtra(d.iso, course, result.recipe)
+      exclude.add(result.recipe.id)
+      fillHistory.set(result.recipe.id, [...(fillHistory.get(result.recipe.id) || []), d.iso])
+      added += 1
+    }
+    if (added > 0) toast(`Added ${added} ${added > 1 ? info.label.toLowerCase() : info.one}.`)
+    else if (open === 0) toast(`Every planned night already has ${course === 'side' ? 'a side' : 'a dessert'} -- plan dinners first, or clear one.`)
+    else toast(`No ${info.label.toLowerCase()} to suggest -- add some under Recipes.`, 'warn')
+  }
+
+  /**
+   * Open a dish's recipe. Days more than two months back keep only a
+   * summary, so the full recipe is looked up in the lists when it's needed.
+   */
+  const openDish = (dish) => {
+    if (!dish) return
+    if (!dish.trimmed) {
+      setViewing(dish)
+      return
+    }
+    const full = [...mine, ...saved, ...HOUSE_RECIPES, ...HOUSE_SIDES, ...HOUSE_DESSERTS, ...library.recipes].find((r) => r.id === dish.id)
+    if (full) setViewing(full)
+    else toast(`${dish.title} is from more than two months ago, and its recipe isn't in your lists any more.`)
+  }
+
   const savePlan = async () => {
     try {
       await save()
@@ -287,7 +392,12 @@ export default function WeekView({ onOpenSettings }) {
       const written = await pushWeekToCalendar(
         token,
         startIso,
-        days.map((d) => ({ iso: d.iso, meal: plan.days[d.iso]?.dinner })),
+        days.map((d) => ({
+          iso: d.iso,
+          meal: plan.days[d.iso]?.dinner,
+          sides: plan.days[d.iso]?.sides || [],
+          dessert: plan.days[d.iso]?.dessert || null,
+        })),
         { dinnerTime: settings.dinnerTime, calendarId: settings.calendarId }
       )
       toast(written ? `Plan saved -- ${written} dinner${written > 1 ? 's' : ''} on your calendar.` : 'Nothing planned yet to sync.')
@@ -359,6 +469,12 @@ export default function WeekView({ onOpenSettings }) {
           <button type="button" className="btn btn-secondary" onClick={planWeekFromMine} title="Only suggests from your own recipe book">
             Fill from my recipes
           </button>
+          <button type="button" className="btn btn-secondary" onClick={() => fillExtras('side')} disabled={!hasAnyMeal} title="Adds a side to each planned dinner that doesn't have one">
+            Fill sides
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => fillExtras('dessert')} disabled={!hasAnyMeal} title="Adds a dessert to each planned night that doesn't have one">
+            Fill desserts
+          </button>
           <button type="button" className="btn btn-primary" onClick={savePlan} disabled={loading}>
             Save plan
           </button>
@@ -412,7 +528,13 @@ export default function WeekView({ onOpenSettings }) {
             onTakeout={() => setTakeoutFor({ iso: d.iso, name: d.name })}
             onSwap={() => swapFor(d.iso)}
             onRemove={() => removeMealAt(d.iso)}
-            onView={() => setViewing(plan.days[d.iso]?.dinner)}
+            onView={() => openDish(plan.days[d.iso]?.dinner)}
+            sides={plan.days[d.iso]?.sides || []}
+            dessert={plan.days[d.iso]?.dessert || null}
+            onSuggestExtra={(course, replacing) => suggestExtraFor(d.iso, course, replacing)}
+            onPickExtra={(course) => setPickerFor({ iso: d.iso, name: d.name, course })}
+            onRemoveExtra={(course, dish) => removeExtra(d.iso, course, dish)}
+            onViewDish={openDish}
             onPickRecipe={() => setPickerFor({ iso: d.iso, name: d.name })}
             onMoveMeal={moveMealAt}
             pendingSave={pendingSaves[d.iso]}
@@ -442,10 +564,12 @@ export default function WeekView({ onOpenSettings }) {
       {pickerFor && (
         <MealPicker
           dayName={pickerFor.name}
+          course={pickerFor.course || 'main'}
           mine={mine}
           saved={saved}
           onPick={(recipe) => {
-            pickMeal(pickerFor.iso, recipe)
+            if (pickerFor.course && pickerFor.course !== 'main') placeExtra(pickerFor.iso, pickerFor.course, recipe)
+            else pickMeal(pickerFor.iso, recipe)
             setPickerFor(null)
           }}
           onClose={() => setPickerFor(null)}

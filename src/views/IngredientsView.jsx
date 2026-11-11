@@ -46,8 +46,9 @@ export default function IngredientsView() {
     const from = toISODate(addDays(new Date(), -14))
     const to = toISODate(addDays(new Date(), 14))
     return Object.entries(plan.days || {})
-      .filter(([iso, day]) => iso >= from && iso <= to && day?.dinner && !day.dinner.takeout)
-      .map(([, day]) => day.dinner)
+      .filter(([iso]) => iso >= from && iso <= to)
+      .flatMap(([, day]) => [day?.dinner, ...(day?.sides || []), day?.dessert])
+      .filter((dish) => dish && !dish.takeout)
   }, [plan])
 
   const [query, setQuery] = useState('')

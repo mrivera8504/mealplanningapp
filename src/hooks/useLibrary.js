@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { searchRecipes } from '../lib/spoonacular'
 import { evictions, filterNew, needsRefill, planRefill } from '../lib/library'
 import { servedDates } from '../lib/suggestions'
+import { courseOf } from '../lib/courses'
 import { toISODate } from '../lib/dates'
 
 // One refill at a time across mounts (StrictMode double-mounts effects), so a
@@ -17,10 +18,12 @@ async function refill(repo, library, meta, context) {
   const fetched = []
   let error = null
   // One after the other: the free plan allows a single request per second.
-  for (const search of planRefill(context)) {
+  let extra = meta?.lastExtra || null
+  for (const search of planRefill(context, Math.random, extra)) {
     try {
-      const { recipes } = await searchRecipes({ type: 'main course', cuisine: search.cuisine, sort: 'random' })
+      const { recipes } = await searchRecipes({ type: search.type, cuisine: search.cuisine, sort: 'random' }, search.course)
       fetched.push(...recipes.map((r) => clean({ ...r, addedAt: now, reason: search.reason })))
+      if (search.course !== 'main') extra = search.course
     } catch (err) {
       error = err?.code || 'upstream_error'
       if (error !== 'upstream_error') break // no key or no quota: the second search would fail too
@@ -33,13 +36,15 @@ async function refill(repo, library, meta, context) {
     prefs: context.prefs,
   })
   let next = [...library, ...fresh]
-  const drop = new Set(evictions(next, new Set(servedDates(context.plan).keys())))
+  const everPlanned = new Set(['main', 'side', 'dessert'].flatMap((c) => [...servedDates(context.plan, c).keys()]))
+  const drop = new Set(evictions(next, everPlanned))
   next = next.filter((r) => !drop.has(r.id))
 
   const nextMeta = {
     lastAttemptAt: now,
     lastFetchAt: error && !fresh.length ? meta?.lastFetchAt || null : now,
     lastError: error,
+    lastExtra: extra,
   }
   await repo.saveLibraryRecipes(fresh.filter((r) => !drop.has(r.id)))
   await repo.removeLibraryRecipes(library.filter((r) => drop.has(r.id)).map((r) => r.id))
@@ -50,7 +55,8 @@ async function refill(repo, library, meta, context) {
 /**
  * The library of outside recipes that suggestions can draw on, plus the state
  * of its last refill. Stored with the account; topped up about once a week
- * (two searches, a couple of quota points), sooner when stock runs low.
+ * (three searches -- two for dinners, one for sides or desserts -- a few quota
+ * points), sooner when stock runs low.
  *
  * `enabled` false (the "0 new ideas" setting) never fetches and offers none.
  * `ready` holds the first refill until the plan has loaded, so the searches
@@ -97,7 +103,7 @@ export function useLibrary(enabled, { ready, saved, mine, prefs, plan }) {
       setStatus(meta || null)
 
       const planned = servedDates(context.current.plan)
-      const unplanned = library.filter((r) => !planned.has(r.id)).length
+      const unplanned = library.filter((r) => courseOf(r) === 'main' && !planned.has(r.id)).length
       if (!needsRefill(meta, unplanned)) return
 
       inFlight ||= refill(repo, library, meta, context.current).finally(() => {

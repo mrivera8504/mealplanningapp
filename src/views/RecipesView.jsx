@@ -9,18 +9,21 @@ import { usePlan } from '../hooks/usePlan'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
+import { HOUSE_DESSERTS, HOUSE_SIDES } from '../lib/houseExtras'
+import { COURSES, MAX_SIDES, courseInfo, courseOf, ofCourse } from '../lib/courses'
 import { searchRecipes, RECIPE_PAGE_SIZE } from '../lib/spoonacular'
 import { toISODate, weekDates } from '../lib/dates'
 
 const CUISINES = ['', 'American', 'Chinese', 'French', 'Greek', 'Indian', 'Italian', 'Japanese', 'Mediterranean', 'Mexican', 'Middle Eastern', 'Spanish', 'Thai', 'Vietnamese']
 const DIETS = ['', 'vegetarian', 'vegan', 'gluten free', 'ketogenic', 'pescetarian']
-const TYPES = ['', 'main course', 'soup', 'salad', 'side dish', 'dessert']
+const TYPES = ['', 'main course', 'soup', 'salad'] // dish filter for mains; sides and desserts search their own type
+const HOUSE = { main: HOUSE_RECIPES, side: HOUSE_SIDES, dessert: HOUSE_DESSERTS }
 
 /** Local fallback search over the house collection when Spoonacular is unavailable. */
-function searchHouse({ query, cuisine, diet, ingredients }) {
+function searchHouse({ query, cuisine, diet, ingredients }, course = 'main') {
   const q = (query || '').toLowerCase()
   const ings = (ingredients || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean)
-  return HOUSE_RECIPES.filter((r) => {
+  return HOUSE[course].filter((r) => {
     if (q && !r.title.toLowerCase().includes(q) && !r.categories.some((c) => c.includes(q))) return false
     if (cuisine && r.cuisine !== cuisine) return false
     if (diet && !r.diets.includes(diet.replace('pescetarian', 'pescatarian'))) return false
@@ -32,13 +35,17 @@ function searchHouse({ query, cuisine, diet, ingredients }) {
 export default function RecipesView() {
   const { user } = useAuth()
   const toast = useToast()
-  const { saved, isSaved, toggleSave } = useSavedRecipes()
-  const { mine, upsertMine, removeMine } = useMyRecipes()
+  const { saved: allSaved, isSaved, toggleSave, updateSaved } = useSavedRecipes()
+  const { mine: allMine, upsertMine, removeMine } = useMyRecipes()
   const startIso = toISODate(new Date()) // same rolling 7-day window as WeekView
-  const { plan, setMeal } = usePlan()
+  const { plan, setMeal, addSide, setDessert } = usePlan()
   const days = useMemo(() => weekDates(startIso), [startIso])
 
-  const [tab, setTab] = useState('find') // find | saved | house
+  const [course, setCourse] = useState('main') // main | side | dessert -- every list below shows one course
+  const info = courseInfo(course)
+  const saved = useMemo(() => ofCourse(allSaved, course), [allSaved, course])
+  const mine = useMemo(() => ofCourse(allMine, course), [allMine, course])
+  const [tab, setTab] = useState('find') // find | saved | mine | house
   const [query, setQuery] = useState('')
   const [ingredients, setIngredients] = useState('')
   const [byIngredients, setByIngredients] = useState(false)
@@ -52,6 +59,7 @@ export default function RecipesView() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [searchNote, setSearchNote] = useState(null)
   const activeParamsRef = useRef(null)
+  const activeCourseRef = useRef('main')
   const [viewing, setViewing] = useState(null)
   const [placing, setPlacing] = useState(null) // recipe awaiting a day pick
   const [editing, setEditing] = useState(null) // null | 'new' | recipe
@@ -72,8 +80,9 @@ export default function RecipesView() {
         includeIngredients: byIngredients ? ingredients : '',
         cuisine,
         diet,
-        type,
+        type: course === 'main' ? type || 'main course' : info.spoonacularType,
       }
+      activeCourseRef.current = course
       activeParamsRef.current = params
       setSearching(true)
     } else {
@@ -82,7 +91,7 @@ export default function RecipesView() {
     }
     setSearchNote(null)
     try {
-      const { recipes, totalResults: total } = await searchRecipes(params)
+      const { recipes, totalResults: total } = await searchRecipes(params, activeCourseRef.current)
       setResults((prev) => (nextOffset ? [...(prev || []), ...recipes] : recipes))
       setTotalResults(total)
       setOffset(nextOffset)
@@ -91,7 +100,7 @@ export default function RecipesView() {
       if (nextOffset) {
         setSearchNote('api-down')
       } else {
-        const local = searchHouse({ query, cuisine, diet, ingredients: byIngredients ? ingredients : '' })
+        const local = searchHouse({ query, cuisine, diet, ingredients: byIngredients ? ingredients : '' }, course)
         setResults(local)
         setTotalResults(local.length)
         setSearchNote(err.code === 'not_configured' ? 'house-only' : 'api-down')
@@ -104,7 +113,14 @@ export default function RecipesView() {
 
   const handleLoadMore = () => runSearch(null, offset + RECIPE_PAGE_SIZE)
 
-  const list = tab === 'saved' ? saved : tab === 'mine' ? mine : tab === 'house' ? HOUSE_RECIPES : results
+  const list = tab === 'saved' ? saved : tab === 'mine' ? mine : tab === 'house' ? HOUSE[course] : results
+
+  const switchCourse = (next) => {
+    setCourse(next)
+    setResults(null)
+    setTotalResults(0)
+    setSearchNote(null)
+  }
 
   const handleToggleSave = async (recipe) => {
     const nowSaved = await toggleSave(recipe)
@@ -112,15 +128,42 @@ export default function RecipesView() {
   }
 
   const placeOnDay = (iso) => {
-    setMeal(iso, placing)
     const dayName = days.find((d) => d.iso === iso)?.name
-    toast(`${placing.title} planned for ${dayName}.`)
+    const placingCourse = courseOf(placing)
+    if (placingCourse === 'side') {
+      if ((plan.days[iso]?.sides?.length || 0) >= MAX_SIDES) return
+      addSide(iso, placing)
+      toast(`${placing.title} added as a side for ${dayName}.`)
+    } else if (placingCourse === 'dessert') {
+      setDessert(iso, placing)
+      toast(`${placing.title} is dessert for ${dayName}.`)
+    } else {
+      setMeal(iso, placing)
+      toast(`${placing.title} planned for ${dayName}.`)
+    }
     setPlacing(null)
     setViewing(null)
   }
 
   return (
     <div className="recipes-view">
+      <div className="recipes-course">
+        <div className="seg" role="radiogroup" aria-label="Course">
+          {COURSES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={course === c.value}
+              className={`seg-btn${course === c.value ? ' seg-btn-on' : ''}`}
+              onClick={() => switchCourse(c.value)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="recipes-tabs" role="tablist" aria-label="Recipe collections">
         {[
           ['find', 'Find new'],
@@ -155,7 +198,7 @@ export default function RecipesView() {
             ) : (
               <input
                 className="input search-input"
-                placeholder="Search dinners — try “braised short ribs”"
+                placeholder={course === 'main' ? 'Search dinners — try “braised short ribs”' : course === 'side' ? 'Search sides — try “roasted carrots”' : 'Search desserts — try “apple crisp”'}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Search recipes"
@@ -184,11 +227,13 @@ export default function RecipesView() {
                 <option key={d} value={d}>{d || 'Any diet'}</option>
               ))}
             </select>
-            <select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Dish type">
-              {TYPES.map((t) => (
-                <option key={t} value={t}>{t || 'Any dish'}</option>
-              ))}
-            </select>
+            {course === 'main' && (
+              <select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Dish type">
+                {TYPES.map((t) => (
+                  <option key={t} value={t}>{t || 'Any main'}</option>
+                ))}
+              </select>
+            )}
           </div>
         </form>
       )}
@@ -219,16 +264,18 @@ export default function RecipesView() {
         <div className="recipes-empty">
           <p className="note recipes-empty-line">
             {tab === 'saved'
-              ? 'No saved recipes yet.'
+              ? `No saved ${info.label.toLowerCase()} yet.`
               : tab === 'mine'
-                ? 'Your recipe book is waiting for its first entry.'
+                ? course === 'main' ? 'Your recipe book is waiting for its first entry.' : `No ${info.label.toLowerCase()} in your recipe book yet.`
                 : 'Nothing matched that craving.'}
           </p>
           <p className="muted">
             {tab === 'saved'
               ? 'Tap Save on any recipe and it will live here, ready for meal plans.'
               : tab === 'mine'
-                ? 'Add the dinners you actually make — then fill whole weeks with them from the planner.'
+                ? course === 'main'
+                  ? 'Add the dinners you actually make — then fill whole weeks with them from the planner.'
+                  : `Add the ${info.label.toLowerCase()} you actually make, and the planner can suggest them alongside dinner.`
                 : 'Loosen a filter or two and try again.'}
           </p>
           {tab === 'mine' && (
@@ -282,6 +329,16 @@ export default function RecipesView() {
           onClose={() => setViewing(null)}
           onToggleSave={() => handleToggleSave(viewing)}
           onAddToDay={() => setPlacing(viewing)}
+          onChangeCourse={
+            isSaved(viewing.id) && !viewing.mine
+              ? (next) => {
+                  const moved = { ...allSaved.find((r) => r.id === viewing.id), course: next }
+                  updateSaved(moved)
+                  setViewing(moved)
+                  toast(`Moved to ${courseInfo(next).label}.`)
+                }
+              : undefined
+          }
         />
       )}
 
@@ -305,6 +362,7 @@ export default function RecipesView() {
           }}
           onClose={() => setEditing(null)}
           user={user}
+          defaultCourse={course}
         />
       )}
     </div>

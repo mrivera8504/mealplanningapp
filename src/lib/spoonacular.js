@@ -1,3 +1,5 @@
+import { courseFromDishTypes } from './courses'
+
 /**
  * Client for the /api/recipes serverless proxy (see netlify/functions).
  * Normalizes Spoonacular's shapes into the app's single recipe format:
@@ -39,7 +41,11 @@ function stripHtml(html) {
   return (html || '').replace(/<[^>]+>/g, '')
 }
 
-export function normalizeRecipe(raw) {
+/**
+ * `course` overrides the guess from Spoonacular's dish types -- a search that
+ * asked for side dishes or desserts knows what it got.
+ */
+export function normalizeRecipe(raw, course) {
   const nutrients = raw.nutrition?.nutrients || []
   const grab = (name) => {
     const n = nutrients.find((x) => x.name === name)
@@ -51,6 +57,7 @@ export function normalizeRecipe(raw) {
     title: raw.title,
     image: raw.image || null,
     categories: categoriesFrom(raw),
+    course: course || courseFromDishTypes(raw.dishTypes),
     cuisine: raw.cuisines?.[0] || null,
     diets: raw.diets || [],
     readyInMinutes: raw.readyInMinutes || null,
@@ -91,14 +98,18 @@ export const RECIPE_PAGE_SIZE = 12
 
 /**
  * Search; params: {query, cuisine, diet, type, includeIngredients, maxReadyTime, offset}.
+ * `asCourse` files every result under that course (the Recipes page searches
+ * one course at a time); without it, a side-dish or dessert search sets it
+ * and anything else is read off Spoonacular's dish types.
  * Returns { recipes, totalResults } — pass an increasing `offset` (multiples of
  * RECIPE_PAGE_SIZE) to page through the full result set.
  */
-export async function searchRecipes(params) {
+export async function searchRecipes(params, asCourse) {
   const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v))
   const data = await call('', clean)
+  const course = asCourse || (clean.type === 'side dish' ? 'side' : clean.type === 'dessert' ? 'dessert' : undefined)
   return {
-    recipes: (data.results || []).map(normalizeRecipe),
+    recipes: (data.results || []).map((r) => normalizeRecipe(r, course)),
     totalResults: data.totalResults ?? 0,
   }
 }
@@ -106,7 +117,9 @@ export async function searchRecipes(params) {
 /** Full detail (nutrition + complete ingredients/steps). */
 export async function getRecipeDetail(spoonacularId) {
   const data = await call(`/${spoonacularId}`)
-  return normalizeRecipe(data)
+  // The detail record refines a recipe already in hand; its course was settled when it was found.
+  const { course: _course, ...detail } = normalizeRecipe(data)
+  return detail
 }
 
 /** Extract a recipe from an arbitrary URL via Spoonacular. */
@@ -118,5 +131,5 @@ export async function extractRecipeFromUrl(url) {
 /** A batch of random dinners for the weekly discovery mix (~1.1 quota points per call). */
 export async function fetchRandomRecipes() {
   const data = await call('/random')
-  return (data.recipes || []).map(normalizeRecipe)
+  return (data.recipes || []).map((r) => normalizeRecipe(r))
 }
