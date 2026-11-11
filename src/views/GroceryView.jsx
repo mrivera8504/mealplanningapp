@@ -1,17 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { usePlan } from '../hooks/usePlan'
 import { useWalmartProducts } from '../hooks/useWalmartProducts'
+import { useIngredients } from '../hooks/useIngredients'
+import { useSettings } from '../context/SettingsContext'
 import WalmartPicker, { ProductLine } from '../components/WalmartPicker'
 import { buildGroceryItems, normalizeName } from '../lib/grocery'
 import { walmartCartUrl } from '../lib/walmart'
+import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
+import { SORT_MODES, arrangeRows, moveInOrder, shiftSection } from '../lib/groceryOrder'
 import { fmtWeekRange, toISODate, weekDates, weekIdFor } from '../lib/dates'
 
 /**
  * Grocery list for the current week. The generated list is derived from the
- * plan; checked-off state and manual extras persist per week. Each item can
+ * plan; checked-off state and manual extras persist per week. It can be shown
+ * by store section (in the household's own section order), by name, or in a
+ * manual order that carries over from week to week. Each item can
  * be matched to a remembered Walmart product, and everything matched and not
  * yet checked off can be sent to a Walmart cart in one go.
  */
@@ -25,6 +31,11 @@ export default function GroceryView() {
   const [stateLoaded, setStateLoaded] = useState(false)
   const [newItem, setNewItem] = useState('')
   const walmart = useWalmartProducts()
+  const ingredients = useIngredients()
+  const { settings, update: updateSettings } = useSettings()
+  const sortMode = settings.grocerySort || 'name'
+  const dragKey = useRef(null)
+  const [dropTarget, setDropTarget] = useState(null)
   const [pickerQueue, setPickerQueue] = useState(null)
   const [renames, setRenames] = useState({})
   const [editing, setEditing] = useState(null) // { key, draft }
@@ -116,6 +127,7 @@ export default function GroceryView() {
       key: x.key,
       matchKey: normalizeName(x.name) || x.key,
       name: x.name,
+      aisle: null,
       quantities: '',
       recipes: [],
       sources: [],
@@ -133,6 +145,27 @@ export default function GroceryView() {
       .filter((r) => walmart.matches[r.matchKey]?.product)
       .map((r) => [r.matchKey, walmart.matches[r.matchKey]])
   ).values()].map((m) => ({ itemId: m.product.itemId, qty: m.qty }))
+
+  const groups = arrangeRows(allRows, sortMode, ingredients)
+  const shownKeys = [...new Set(groups.flatMap((g) => g.rows.map((r) => r.matchKey)))]
+
+  /** Manual mode: put `key` just before or after `targetKey`, remembered across weeks. */
+  const placeRow = (key, targetKey, side) => {
+    if (!key || !targetKey || key === targetKey) return
+    ingredients.setManualOrder(moveInOrder(ingredients.manualOrder, shownKeys, key, targetKey, side))
+  }
+
+  const nudgeRow = (key, delta) => {
+    const i = shownKeys.indexOf(key)
+    const target = shownKeys[i + delta]
+    if (target) placeRow(key, target, delta < 0 ? 'before' : 'after')
+  }
+
+  const nudgeSection = (section, delta) =>
+    ingredients.setSectionOrder(shiftSection(ingredients.sectionOrder, section, delta))
+
+  const sectionOfRow = (row) =>
+    sectionFor({ chosen: ingredients.items[row.matchKey]?.section, aisle: row.aisle, name: row.name })
 
   const openPicker = (rows) =>
     setPickerQueue(rows.map((r) => ({ key: r.matchKey, name: r.name, quantities: r.quantities })))
@@ -186,83 +219,200 @@ export default function GroceryView() {
         </div>
       ) : (
         <>
-          <ul className="grocery-list">
-            {allRows.map((row) => (
-              <li key={row.key} className={state.checked[row.key] ? 'grocery-row grocery-row-done' : 'grocery-row'}>
-                {editing?.key === row.key ? (
-                  <form
-                    className="grocery-rename"
-                    onSubmit={(e) => {
+          <div className="grocery-sortbar">
+            <span className="overline">Sort by</span>
+            <div className="seg" role="radiogroup" aria-label="Sort the list">
+              {SORT_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={sortMode === m.value}
+                  className={`seg-btn${sortMode === m.value ? ' seg-btn-on' : ''}`}
+                  onClick={() => updateSettings({ grocerySort: m.value })}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {sortMode === 'manual' && <span className="muted grocery-sort-hint">Drag items, or use the arrows. Your order carries over to next week.</span>}
+          </div>
+
+          {groups.map((group, gi) => (
+            <section key={group.section || 'all'} className="grocery-group">
+              {group.section && (
+                <h3 className="grocery-section-head">
+                  <span>{group.section}</span>
+                  <span className="grocery-section-move">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => nudgeSection(group.section, -1)}
+                      disabled={orderedSections(ingredients.sectionOrder).indexOf(group.section) === 0}
+                      aria-label={`Move ${group.section} up`}
+                      title="Move section up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => nudgeSection(group.section, 1)}
+                      disabled={gi === groups.length - 1 && orderedSections(ingredients.sectionOrder).indexOf(group.section) === SECTIONS.length - 1}
+                      aria-label={`Move ${group.section} down`}
+                      title="Move section down"
+                    >
+                      ↓
+                    </button>
+                  </span>
+                </h3>
+              )}
+              <ul className="grocery-list">
+                {group.rows.map((row) => (
+                  <li
+                    key={row.key}
+                    className={[
+                      'grocery-row',
+                      state.checked[row.key] && 'grocery-row-done',
+                      sortMode === 'manual' && 'grocery-row-movable',
+                      dropTarget === row.key && 'grocery-row-drop',
+                    ].filter(Boolean).join(' ')}
+                    draggable={sortMode === 'manual' && editing?.key !== row.key}
+                    onDragStart={(e) => {
+                      dragKey.current = row.matchKey
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={(e) => {
+                      if (sortMode !== 'manual' || !dragKey.current) return
                       e.preventDefault()
-                      renameRow(row, editing.draft)
+                      setDropTarget(row.key)
+                    }}
+                    onDragLeave={() => setDropTarget((t) => (t === row.key ? null : t))}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setDropTarget(null)
+                      const from = shownKeys.indexOf(dragKey.current)
+                      const to = shownKeys.indexOf(row.matchKey)
+                      placeRow(dragKey.current, row.matchKey, from < to ? 'after' : 'before')
+                      dragKey.current = null
+                    }}
+                    onDragEnd={() => {
+                      dragKey.current = null
+                      setDropTarget(null)
                     }}
                   >
-                    <input
-                      className="input"
-                      autoFocus
-                      value={editing.draft}
-                      onChange={(e) => setEditing({ ...editing, draft: e.target.value })}
-                      onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
-                      aria-label={`New name for ${row.name}`}
-                    />
-                    <button type="submit" className="btn btn-primary btn-sm">
-                      Save
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <label className="grocery-label">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(state.checked[row.key])}
-                      onChange={() => toggle(row.key)}
-                    />
-                    <span className="grocery-name">{row.name}</span>
-                    {row.renamedFrom.length > 0 && (
-                      <span className="grocery-renamed muted">was {row.renamedFrom.join(', ')}</span>
+                    {editing?.key === row.key ? (
+                      <form
+                        className="grocery-rename"
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          renameRow(row, editing.draft)
+                        }}
+                      >
+                        <input
+                          className="input"
+                          autoFocus
+                          value={editing.draft}
+                          onChange={(e) => setEditing({ ...editing, draft: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                          aria-label={`New name for ${row.name}`}
+                        />
+                        <button type="submit" className="btn btn-primary btn-sm">
+                          Save
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>
+                          Cancel
+                        </button>
+                      </form>
+                    ) : (
+                      <label className="grocery-label">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(state.checked[row.key])}
+                          onChange={() => toggle(row.key)}
+                        />
+                        <span className="grocery-name">{row.name}</span>
+                        {row.renamedFrom.length > 0 && (
+                          <span className="grocery-renamed muted">was {row.renamedFrom.join(', ')}</span>
+                        )}
+                        {row.quantities && <span className="mono grocery-qty">{row.quantities}</span>}
+                      </label>
                     )}
-                    {row.quantities && <span className="mono grocery-qty">{row.quantities}</span>}
-                  </label>
-                )}
-                {row.recipes.length > 0 && (
-                  <span className="grocery-sources muted" title={row.recipes.join(' · ')}>
-                    {row.recipes.length > 1 ? `${row.recipes.length} recipes` : row.recipes[0]}
-                  </span>
-                )}
-                {editing?.key !== row.key && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm grocery-edit"
-                    onClick={() => setEditing({ key: row.key, draft: row.name })}
-                    aria-label={`Rename ${row.name}`}
-                    title="Rename"
-                  >
-                    ✎
-                  </button>
-                )}
-                {row.extra && (
-                  <button
-                    type="button"
-                    className="btn btn-danger-ghost btn-sm"
-                    onClick={() => removeExtra(row.key)}
-                    aria-label={`Remove ${row.name}`}
-                  >
-                    ✕
-                  </button>
-                )}
-                {walmart.loaded && !state.checked[row.key] && (
-                  <WalmartLine
-                    match={walmart.matches[row.matchKey]}
-                    onPick={() => openPicker([row])}
-                    onQty={(q) => walmart.setQty(row.matchKey, q)}
-                    onUndoSkip={() => walmart.forget(row.matchKey)}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
+                    {row.recipes.length > 0 && (
+                      <span className="grocery-sources muted" title={row.recipes.join(' · ')}>
+                        {row.recipes.length > 1 ? `${row.recipes.length} recipes` : row.recipes[0]}
+                      </span>
+                    )}
+                    {editing?.key !== row.key && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm grocery-edit"
+                        onClick={() => setEditing({ key: row.key, draft: row.name })}
+                        aria-label={`Rename ${row.name}`}
+                        title="Rename"
+                      >
+                        ✎
+                      </button>
+                    )}
+                    {row.extra && (
+                      <button
+                        type="button"
+                        className="btn btn-danger-ghost btn-sm"
+                        onClick={() => removeExtra(row.key)}
+                        aria-label={`Remove ${row.name}`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                    {walmart.loaded && !state.checked[row.key] && (
+                      <WalmartLine
+                        match={walmart.matches[row.matchKey]}
+                        onPick={() => openPicker([row])}
+                        onQty={(q) => walmart.setQty(row.matchKey, q)}
+                        onUndoSkip={() => walmart.forget(row.matchKey)}
+                      />
+                    )}
+                    {sortMode === 'section' && editing?.key !== row.key && (
+                      <select
+                        className="grocery-section-select"
+                        value={sectionOfRow(row)}
+                        onChange={(e) => ingredients.setSection(row.matchKey, e.target.value)}
+                        aria-label={`Section for ${row.name}`}
+                      >
+                        {SECTIONS.map((sec) => (
+                          <option key={sec} value={sec}>
+                            {sec}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {sortMode === 'manual' && editing?.key !== row.key && (
+                      <span className="grocery-move">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => nudgeRow(row.matchKey, -1)}
+                          disabled={shownKeys.indexOf(row.matchKey) === 0}
+                          aria-label={`Move ${row.name} up`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => nudgeRow(row.matchKey, 1)}
+                          disabled={shownKeys.indexOf(row.matchKey) === shownKeys.length - 1}
+                          aria-label={`Move ${row.name} down`}
+                        >
+                          ↓
+                        </button>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
 
           <form className="grocery-add" onSubmit={addExtra}>
             <input

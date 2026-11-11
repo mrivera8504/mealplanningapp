@@ -8,6 +8,7 @@ const DEFAULTS = {
   calendarId: 'primary',
   calendarName: null,
   newIdeasPerWeek: 2, // Spoonacular discovery recipes mixed into a week; 0 turns discovery off
+  grocerySort: 'name', // 'section' | 'name' | 'manual'
 }
 
 const SettingsContext = createContext(null)

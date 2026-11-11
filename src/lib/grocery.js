@@ -54,8 +54,8 @@ export const renameSource = (meal, ingredientName) => `${meal.id || meal.title}:
  * plannedMeals: [{id, title, ingredients: [{name, amount, unit}]}]
  * renames: { [renameSource]: 'new name' } — applied before merging, so a
  *   renamed ingredient joins any existing item of that name.
- * Returns [{key, name, quantities: 'text', recipes: [titles], sources: [renameSource],
- *   renamedFrom: [original names]}] sorted by name.
+ * Returns [{key, name, aisle, quantities: 'text', recipes: [titles], sources: [renameSource],
+ *   renamedFrom: [original names]}] sorted by name. `aisle` is Spoonacular's, when known.
  */
 export function buildGroceryItems(plannedMeals, renames = {}) {
   const merged = new Map()
@@ -68,9 +68,10 @@ export function buildGroceryItems(plannedMeals, renames = {}) {
       const key = normalizeName(name)
       if (!key) continue
       if (!merged.has(key)) {
-        merged.set(key, { key, name, units: new Map(), recipes: new Set(), sources: new Set(), renamedFrom: new Set() })
+        merged.set(key, { key, name, aisle: null, units: new Map(), recipes: new Set(), sources: new Set(), renamedFrom: new Set() })
       }
       const item = merged.get(key)
+      item.aisle ||= ing.aisle || null
       item.recipes.add(meal.title)
       item.sources.add(source)
       if (renamed) item.renamedFrom.add(ing.name)
@@ -88,6 +89,7 @@ export function buildGroceryItems(plannedMeals, renames = {}) {
     .map((item) => ({
       key: item.key,
       name: item.name,
+      aisle: item.aisle,
       quantities: [...item.units.entries()]
         .filter(([, amt]) => amt != null)
         .map(([unit, amt]) => (unit ? `${fmtAmount(amt)} ${unit}` : fmtAmount(amt)))

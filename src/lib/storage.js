@@ -132,6 +132,13 @@ export function makeRepo(user) {
       async saveGroceryNames(data) {
         await setDoc(userDoc(uid, 'meta', 'groceryNames'), data)
       },
+      async loadIngredients() {
+        const snap = await getDoc(userDoc(uid, 'meta', 'ingredients'))
+        return snap.exists() ? snap.data() : null
+      },
+      async saveIngredients(data) {
+        await setDoc(userDoc(uid, 'meta', 'ingredients'), data)
+      },
     }
   }
 
@@ -229,6 +236,12 @@ export function makeRepo(user) {
     async saveGroceryNames(data) {
       lsSet('groceryNames', data)
     },
+    async loadIngredients() {
+      return lsGet('ingredients')
+    },
+    async saveIngredients(data) {
+      lsSet('ingredients', data)
+    },
   }
 }
 
@@ -272,4 +285,7 @@ export async function migrateLocalToCloud(cloudRepo) {
 
   const [localNames, cloudNames] = await Promise.all([localRepo.loadGroceryNames(), cloudRepo.loadGroceryNames()])
   if (localNames && !cloudNames) await cloudRepo.saveGroceryNames(localNames)
+
+  const [localIngredients, cloudIngredients] = await Promise.all([localRepo.loadIngredients(), cloudRepo.loadIngredients()])
+  if (localIngredients && !cloudIngredients) await cloudRepo.saveIngredients(localIngredients)
 }
