@@ -4,12 +4,13 @@ import { useWalmartProducts } from '../hooks/useWalmartProducts'
 import { useIngredients } from '../hooks/useIngredients'
 import { useMyRecipes } from '../hooks/useMyRecipes'
 import { useSavedRecipes } from '../hooks/useSavedRecipes'
+import { usePlan } from '../hooks/usePlan'
 import WalmartPicker, { ProductLine } from '../components/WalmartPicker'
 import { WalmartError, getWalmartItem, walmartProductUrl } from '../lib/walmart'
 import { normalizeName } from '../lib/grocery'
 import { SECTIONS } from '../lib/sections'
 import { STATUSES, buildIngredientRows, mergeIngredients, splitIngredient, viewRows } from '../lib/ingredientsPage'
-import { fmtShort } from '../lib/dates'
+import { addDays, fmtShort, toISODate } from '../lib/dates'
 
 const SORTS = [
   { value: 'name', label: 'Name' },
@@ -37,6 +38,17 @@ export default function IngredientsView() {
   const ingredients = useIngredients()
   const { mine } = useMyRecipes()
   const { saved } = useSavedRecipes()
+  const { plan } = usePlan()
+
+  // Dinners planned in the last two weeks or the next two count too, so house
+  // and library recipes on the grocery list show up here.
+  const plannedRecipes = useMemo(() => {
+    const from = toISODate(addDays(new Date(), -14))
+    const to = toISODate(addDays(new Date(), 14))
+    return Object.entries(plan.days || {})
+      .filter(([iso, day]) => iso >= from && iso <= to && day?.dinner && !day.dinner.takeout)
+      .map(([, day]) => day.dinner)
+  }, [plan])
 
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
@@ -53,8 +65,8 @@ export default function IngredientsView() {
   }, [])
 
   const rows = useMemo(
-    () => buildIngredientRows({ matches: walmart.matches, ingredients, recipes: [...mine, ...saved] }),
-    [walmart.matches, ingredients, mine, saved]
+    () => buildIngredientRows({ matches: walmart.matches, ingredients, recipes: [...mine, ...saved, ...plannedRecipes] }),
+    [walmart.matches, ingredients, mine, saved, plannedRecipes]
   )
   const shown = useMemo(() => viewRows(rows, { query, status, sort }), [rows, query, status, sort])
   const counts = useMemo(() => {
@@ -154,7 +166,7 @@ export default function IngredientsView() {
       <header className="ingredients-head">
         <div>
           <h2>Ingredients</h2>
-          <p className="muted">Every ingredient from your recipes, with its store section and the Walmart product you buy.</p>
+          <p className="muted">Every ingredient from your recipes and this month's plan, with its store section and the Walmart product you buy.</p>
         </div>
         {matchedRows.length > 0 && (
           <button

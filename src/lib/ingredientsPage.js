@@ -27,7 +27,7 @@ const STATUS_RANK = { unavailable: 0, unmatched: 1, matched: 2, skip: 3 }
 
 /**
  * matches: meta/walmart items. ingredients: { items, aliases }.
- * recipes: My recipes + saved recipes.
+ * recipes: My recipes, saved recipes, and recently planned dinners (duplicates are fine).
  * Returns [{ key, name, recipes: [titles], section, match, status, mergedFrom: [{ key, name }] }]
  */
 export function buildIngredientRows({ matches = {}, ingredients = {}, recipes = [] }) {
@@ -46,7 +46,11 @@ export function buildIngredientRows({ matches = {}, ingredients = {}, recipes = 
     return row
   }
 
+  const seenRecipes = new Set()
   for (const recipe of recipes) {
+    const id = recipe.id || recipe.title
+    if (seenRecipes.has(id)) continue
+    seenRecipes.add(id)
     for (const ing of recipe.ingredients || []) {
       const row = touch(normalizeName(ing.name), ing.name)
       if (!row) continue
