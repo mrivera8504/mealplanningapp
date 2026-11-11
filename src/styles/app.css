@@ -2038,15 +2038,13 @@
   border-top: 1px dotted var(--rule-strong);
 }
 
+/* Label on the left; the dishes, then the add button, stacked on the right --
+   so a title gets the card's full width instead of sharing it with a button. */
 .extra-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 3.8rem minmax(0, 1fr);
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px var(--sp-2);
-}
-
-.extra-label {
-  flex: 0 0 3.6rem;
+  column-gap: var(--sp-2);
 }
 
 .extra-list {
@@ -2055,8 +2053,12 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  flex: 1 1 8rem;
   min-width: 0;
+}
+
+.extra-row > .move-wrap {
+  grid-column: 2;
+  justify-self: start;
 }
 
 .extra-item {
@@ -2078,6 +2080,7 @@
 
 .extra-add {
   font-size: var(--text-xs);
+  padding-left: 0;
 }
 
 .picker-quick {
