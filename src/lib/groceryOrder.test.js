@@ -20,6 +20,8 @@ describe('sections', () => {
     expect(sectionFromKeywords('sharp cheddar')).toBe('Dairy and eggs')
     expect(sectionFromKeywords('kosher salt')).toBe('Spices and baking')
     expect(sectionFromKeywords('sourdough bread')).toBe('Bakery')
+    expect(sectionFromKeywords('ripe peaches')).toBe('Produce')
+    expect(sectionFromKeywords('halloumi')).toBe('Dairy and eggs')
     expect(sectionFromKeywords('xanthan')).toBeNull()
   })
 
