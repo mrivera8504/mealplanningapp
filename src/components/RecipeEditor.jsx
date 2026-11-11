@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CATEGORY_LABELS } from '../lib/houseRecipes'
 import { uploadRecipeImage } from '../lib/storage'
 import { extractRecipeFromUrl } from '../lib/spoonacular'
+import { COURSES, courseOf } from '../lib/courses'
 
 const EMPTY_ING = { amount: '', unit: '', name: '' }
 
@@ -9,12 +10,13 @@ const EMPTY_ING = { amount: '', unit: '', name: '' }
  * Create or edit a personal recipe. Ingredients are structured rows so the
  * grocery list can merge quantities; steps are one per line.
  */
-export default function RecipeEditor({ recipe, onSave, onClose, user }) {
+export default function RecipeEditor({ recipe, onSave, onClose, user, defaultCourse = 'main' }) {
   const editing = Boolean(recipe)
   const [title, setTitle] = useState(recipe?.title || '')
   const [minutes, setMinutes] = useState(recipe?.readyInMinutes || '')
   const [servings, setServings] = useState(recipe?.servings || '')
   const [cuisine, setCuisine] = useState(recipe?.cuisine || '')
+  const [course, setCourse] = useState(recipe ? courseOf(recipe) : defaultCourse)
   const [categories, setCategories] = useState(recipe?.categories || [])
   const [ingredients, setIngredients] = useState(
     recipe?.ingredients?.length
@@ -113,6 +115,7 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
       id: recipeId,
       mine: true,
       title: title.trim(),
+      course,
       image: imageUrl,
       categories,
       cuisine: cuisine.trim() || null,
@@ -196,6 +199,15 @@ export default function RecipeEditor({ recipe, onSave, onClose, user }) {
               )}
             </div>
           )}
+
+          <div className="field">
+            <label htmlFor="re-course">Course</label>
+            <select id="re-course" className="input" value={course} onChange={(e) => setCourse(e.target.value)}>
+              {COURSES.map((c) => (
+                <option key={c.value} value={c.value}>{c.one[0].toUpperCase() + c.one.slice(1)}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="editor-row">
             <div className="field">

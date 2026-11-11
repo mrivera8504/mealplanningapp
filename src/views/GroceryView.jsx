@@ -42,8 +42,12 @@ export default function GroceryView() {
 
   const meals = useMemo(
     () =>
+      // Everything cooked this week: each night's dinner, its sides and its dessert.
       weekDates(startIso)
-        .map((d) => plan.days[d.iso]?.dinner)
+        .flatMap((d) => {
+          const day = plan.days[d.iso]
+          return [day?.dinner, ...(day?.sides || []), day?.dessert]
+        })
         .filter(Boolean),
     [plan, startIso]
   )

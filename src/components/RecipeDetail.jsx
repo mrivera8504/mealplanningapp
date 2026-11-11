@@ -4,6 +4,7 @@ import { CATEGORY_LABELS } from '../lib/houseRecipes'
 import { getRecipeDetail } from '../lib/spoonacular'
 import { useRotation } from '../context/RotationContext'
 import { addDays, fmtShort, toISODate } from '../lib/dates'
+import { COURSES, courseOf } from '../lib/courses'
 
 const NIGHTS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const SNOOZES = [
@@ -12,8 +13,12 @@ const SNOOZES = [
   { days: 90, label: '3 months' },
 ]
 
-/** How often this recipe comes up in suggestions -- favorite, snooze, fixed night, or never. */
-function RotationControls({ recipeId }) {
+/**
+ * How often this recipe comes up in suggestions -- favorite, snooze, fixed
+ * night, or never. A fixed night only makes sense for dinners, so sides and
+ * desserts don't offer it.
+ */
+function RotationControls({ recipeId, course }) {
   const { prefs, setPref } = useRotation()
   const p = prefs[recipeId] || {}
   const todayIso = toISODate(new Date())
@@ -44,20 +49,22 @@ function RotationControls({ recipeId }) {
             <span className="muted rotation-hint">comes around more often</span>
           </div>
 
-          <div className="rotation-row">
-            <label className="muted" htmlFor={`night-${recipeId}`}>Only on</label>
-            <select
-              id={`night-${recipeId}`}
-              className="input rotation-select"
-              value={p.night ?? ''}
-              onChange={(e) => save({ night: e.target.value === '' ? null : Number(e.target.value) })}
-            >
-              <option value="">any night</option>
-              {NIGHTS.map((n, i) => (
-                <option key={n} value={i}>{n}s</option>
-              ))}
-            </select>
-          </div>
+          {course === 'main' && (
+            <div className="rotation-row">
+              <label className="muted" htmlFor={`night-${recipeId}`}>Only on</label>
+              <select
+                id={`night-${recipeId}`}
+                className="input rotation-select"
+                value={p.night ?? ''}
+                onChange={(e) => save({ night: e.target.value === '' ? null : Number(e.target.value) })}
+              >
+                <option value="">any night</option>
+                {NIGHTS.map((n, i) => (
+                  <option key={n} value={i}>{n}s</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="rotation-row">
             {snoozed ? (
@@ -99,7 +106,7 @@ function RotationControls({ recipeId }) {
  * Full-recipe modal. Spoonacular search results arrive without complete
  * steps/nutrition, so this lazily fetches the full record on open.
  */
-export default function RecipeDetail({ recipe, saved, onClose, onToggleSave, onAddToDay }) {
+export default function RecipeDetail({ recipe, saved, onClose, onToggleSave, onAddToDay, onChangeCourse }) {
   const [full, setFull] = useState(recipe)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const closeRef = useRef(null)
@@ -197,7 +204,23 @@ export default function RecipeDetail({ recipe, saved, onClose, onToggleSave, onA
           </div>
         )}
 
-        <RotationControls recipeId={recipe.id} />
+        {onChangeCourse && (
+          <div className="rotation-row recipe-course-row">
+            <label className="muted" htmlFor={`course-${recipe.id}`}>Listed under</label>
+            <select
+              id={`course-${recipe.id}`}
+              className="input rotation-select"
+              value={courseOf(recipe)}
+              onChange={(e) => onChangeCourse(e.target.value)}
+            >
+              {COURSES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <RotationControls recipeId={recipe.id} course={courseOf(recipe)} />
 
         <footer className="recipe-detail-actions">
           <button

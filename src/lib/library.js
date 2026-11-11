@@ -64,19 +64,23 @@ export function exploreCuisines({ plan, today }) {
 const pickOne = (list, rng) => list[Math.floor(rng() * list.length)]
 
 /**
- * The two searches for one refill: [{ reason, cuisine }]. The taste search
- * draws from the top three leanings (or any cuisine when there's no history
- * yet); the explore search takes a cuisine that's been absent, and never the
- * same one as the taste search.
+ * The searches for one refill: [{ reason, cuisine, type, course }]. The taste
+ * search draws from the top three leanings (or any cuisine when there's no
+ * history yet); the explore search takes a cuisine that's been absent, and
+ * never the same one as the taste search. A third search tops up sides or
+ * desserts, alternating week to week (`lastExtra` is what the last refill
+ * fetched), so those pools grow too.
  */
-export function planRefill(context, rng = Math.random) {
+export function planRefill(context, rng = Math.random, lastExtra = null) {
   const taste = tasteCuisines(context).slice(0, 3)
   const tasteCuisine = taste.length ? pickOne(taste, rng) : null
   let explore = exploreCuisines(context).filter((c) => c !== tasteCuisine)
   if (!explore.length) explore = CUISINES.filter((c) => c !== tasteCuisine)
+  const extra = lastExtra === 'side' ? 'dessert' : 'side'
   return [
-    { reason: 'taste', cuisine: tasteCuisine },
-    { reason: 'explore', cuisine: pickOne(explore, rng) },
+    { reason: 'taste', cuisine: tasteCuisine, type: 'main course', course: 'main' },
+    { reason: 'explore', cuisine: pickOne(explore, rng), type: 'main course', course: 'main' },
+    { reason: extra, cuisine: null, type: extra === 'side' ? 'side dish' : 'dessert', course: extra },
   ]
 }
 
