@@ -51,22 +51,36 @@ function fmtAmount(n) {
 export const renameSource = (meal, ingredientName) => `${meal.id || meal.title}::${normalizeName(ingredientName)}`
 
 /**
+ * Follow merged-ingredient aliases ({ [oldKey]: keptKey }) to the key an
+ * ingredient is listed under. Stops after a few hops in case of a loop.
+ */
+export function canonicalKey(key, aliases = {}) {
+  let k = key
+  for (let i = 0; i < 5 && aliases[k] && aliases[k] !== k; i++) k = aliases[k]
+  return k
+}
+
+/**
  * plannedMeals: [{id, title, ingredients: [{name, amount, unit}]}]
  * renames: { [renameSource]: 'new name' } — applied before merging, so a
  *   renamed ingredient joins any existing item of that name.
+ * merge: { aliases: { [key]: keptKey }, names: { [key]: name } } — merged
+ *   ingredients (see the Ingredients page), applied after renames, so
+ *   "onion" and "yellow onion" become one line under the name chosen.
  * Returns [{key, name, aisle, quantities: 'text', recipes: [titles], sources: [renameSource],
  *   renamedFrom: [original names]}] sorted by name. `aisle` is Spoonacular's, when known.
  */
-export function buildGroceryItems(plannedMeals, renames = {}) {
+export function buildGroceryItems(plannedMeals, renames = {}, { aliases = {}, names = {} } = {}) {
   const merged = new Map()
   for (const meal of plannedMeals) {
     for (const ing of meal.ingredients || []) {
       if (!normalizeName(ing.name)) continue
       const source = renameSource(meal, ing.name)
       const renamed = renames[source]
-      const name = renamed || ing.name
-      const key = normalizeName(name)
-      if (!key) continue
+      const ownKey = normalizeName(renamed || ing.name)
+      if (!ownKey) continue
+      const key = canonicalKey(ownKey, aliases)
+      const name = names[key] || renamed || ing.name
       if (!merged.has(key)) {
         merged.set(key, { key, name, aisle: null, units: new Map(), recipes: new Set(), sources: new Set(), renamedFrom: new Set() })
       }

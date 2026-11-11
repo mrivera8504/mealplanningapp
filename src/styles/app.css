@@ -1830,3 +1830,190 @@
   border-radius: var(--radius-sm);
   padding: var(--sp-2);
 }
+
+/* ---------- Ingredients page ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ingredients-view {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.ingredients-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  border-bottom: 3px double var(--rule-strong);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.ingredients-head h2 {
+  font-size: var(--text-xl);
+}
+
+.ingredients-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.ingredients-search {
+  flex: 1 1 220px;
+}
+
+.ingredients-control {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ingredients-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.ingredients-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(10rem, 1.4fr) 9.5rem minmax(14rem, 2fr) 6.5rem minmax(9rem, 1fr);
+  gap: var(--sp-2);
+  align-items: center;
+  padding: 0.55rem 0.2rem;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+
+.ingredients-row-head {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  border-bottom: 2px solid var(--rule-strong);
+}
+
+.ingredients-row-selected {
+  background: var(--basil-wash);
+}
+
+.ingredients-cell-select input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--paprika);
+}
+
+.ingredients-cell-name,
+.ingredients-cell-product,
+.ingredients-cell-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ingredients-cell-status {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ingredients-recipes,
+.ingredients-merged,
+.ingredients-checked {
+  font-size: var(--text-xs);
+}
+
+.ingredients-merged {
+  color: var(--basil-deep);
+}
+
+.ingredients-product-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ingredients-product-link:hover .walmart-product-name {
+  text-decoration: underline;
+}
+
+.ingredients-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.ingredients-unavailable {
+  color: var(--paprika-deep);
+}
+
+.ingredients-status {
+  font-size: var(--text-xs);
+}
+
+.ingredients-status-matched {
+  background: var(--basil-wash);
+  color: var(--basil-deep);
+}
+
+.ingredients-status-unavailable {
+  background: var(--paprika-wash);
+  color: var(--paprika-deep);
+}
+
+.merge-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: var(--sp-3) 0;
+}
+
+.merge-option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  cursor: pointer;
+}
+
+.merge-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--sp-3);
+}
+
+@media (max-width: 860px) {
+  .ingredients-row-head {
+    display: none;
+  }
+
+  .ingredients-row {
+    grid-template-columns: 2rem 1fr;
+    grid-template-areas:
+      'select name'
+      '. section'
+      '. product'
+      '. qty'
+      '. status';
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--sp-2);
+    padding: var(--sp-2);
+  }
+
+  .ingredients-cell-select { grid-area: select; }
+  .ingredients-cell-name { grid-area: name; }
+  .ingredients-cell-section { grid-area: section; }
+  .ingredients-cell-product { grid-area: product; }
+  .ingredients-cell-qty { grid-area: qty; }
+  .ingredients-cell-status { grid-area: status; }
+}

@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext'
 /**
  * The household's remembered Walmart products, keyed by normalized ingredient
  * name (see normalizeName in lib/grocery). One doc: { items: { [key]: entry } }
- *   entry = { product: {itemId, name, price, size, image}, qty, updatedAt }
+ *   entry = { product: {itemId, name, price, size, image, available}, qty, updatedAt,
+ *             priceCheckedAt?, unavailable? }
  *         | { skip: true, updatedAt }   — "not bought at Walmart / always on hand"
  */
 export function useWalmartProducts() {
@@ -28,7 +29,7 @@ export function useWalmartProducts() {
     (fn) => {
       setMatches((prev) => {
         const next = fn(prev)
-        repo.saveWalmart({ items: next })
+        repo.saveWalmart(JSON.parse(JSON.stringify({ items: next })))
         return next
       })
     },
@@ -37,7 +38,10 @@ export function useWalmartProducts() {
 
   const choose = useCallback(
     (key, product) =>
-      write((m) => ({ ...m, [key]: { product, qty: m[key]?.qty || 1, updatedAt: Date.now() } })),
+      write((m) => ({
+        ...m,
+        [key]: { product, qty: m[key]?.qty || 1, updatedAt: Date.now(), priceCheckedAt: Date.now(), unavailable: product.available === false || undefined },
+      })),
     [write]
   )
 
@@ -57,5 +61,27 @@ export function useWalmartProducts() {
     [write]
   )
 
-  return { matches, loaded, choose, skip, forget, setQty }
+  /** Replace one entry wholesale (used when merging ingredients). */
+  const put = useCallback((key, entry) => write((m) => ({ ...m, [key]: entry })), [write])
+
+  /** Store a fresh price/availability check for a matched product. */
+  const refreshed = useCallback(
+    (key, product) =>
+      write((m) =>
+        m[key]?.product
+          ? {
+              ...m,
+              [key]: {
+                ...m[key],
+                product: { ...m[key].product, ...product },
+                priceCheckedAt: Date.now(),
+                unavailable: product.available === false || undefined,
+              },
+            }
+          : m
+      ),
+    [write]
+  )
+
+  return { matches, loaded, choose, skip, forget, setQty, put, refreshed }
 }

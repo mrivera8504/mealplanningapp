@@ -6,6 +6,7 @@ import SettingsModal from './components/SettingsModal'
 import WeekView from './views/WeekView'
 import RecipesView from './views/RecipesView'
 import GroceryView from './views/GroceryView'
+import IngredientsView from './views/IngredientsView'
 import { useAuth } from './context/AuthContext'
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/" element={<WeekView onOpenSettings={() => setSettingsOpen(true)} />} />
           <Route path="/recipes" element={<RecipesView />} />
           <Route path="/groceries" element={<GroceryView />} />
+          <Route path="/ingredients" element={<IngredientsView />} />
         </Routes>
       </main>
       <footer className="app-footer">
