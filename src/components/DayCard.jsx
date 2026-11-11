@@ -7,18 +7,10 @@ import { fmtShort, isToday } from '../lib/dates'
 /**
  * One day of the weekly spread -- a section of the printed menu card.
  * Supports drag & drop between days plus a tap-based "Move to…" fallback.
- * The Swap/Suggest menus offer three sources: any idea, personal recipes,
- * or a takeout suggestion.
+ * The Swap/Suggest menus offer: any idea, a pick for that night's weather,
+ * personal recipes, browsing, or a takeout suggestion. Weather is always
+ * shown but only shapes a pick when "For this weather" is chosen.
  */
-
-const INVITES = {
-  soup: 'Sounds like soup tonight.',
-  braise: 'A night for the Dutch oven.',
-  grill: 'Take dinner outside tonight.',
-  'no-oven': 'Too hot to turn the oven on.',
-  cozy: 'A stay-in, oven-on kind of night.',
-  open: 'Fair skies -- anything goes.',
-}
 
 /** Small dropdown that closes on outside click / Escape. */
 function Menu({ label, className, children, disabled }) {
@@ -69,6 +61,7 @@ export default function DayCard({
   hasMine, // whether any personal recipes exist
   unit,
   onSuggest,
+  onWeatherPick,
   onSuggestMine,
   onTakeout,
   onSwap,
@@ -95,7 +88,10 @@ export default function DayCard({
   const sourceItems = (
     <>
       <button type="button" role="menuitem" onClick={meal ? onSwap : onSuggest}>
-        {meal ? 'Another idea' : 'Weather pick'}
+        {meal ? 'Another idea' : 'Suggest a meal'}
+      </button>
+      <button type="button" role="menuitem" onClick={onWeatherPick} disabled={!mood} title={mood ? undefined : 'No forecast for this night yet'}>
+        For this weather
       </button>
       <button type="button" role="menuitem" onClick={onSuggestMine} disabled={!hasMine} title={hasMine ? undefined : 'Add recipes under Recipes → My recipes'}>
         Surprise me (my recipes)
@@ -128,7 +124,11 @@ export default function DayCard({
         <WeatherBadge day={weatherDay} mood={mood} unit={unit} />
       </header>
 
-      {mood && <p className="day-card-mood note">{mood.note}</p>}
+      {mood && (
+        <p className="day-card-mood note">
+          {meal?.pickedFor === 'weather' && meal.weatherNote ? `Picked for ${meal.weatherNote}` : mood.sky.label}
+        </p>
+      )}
 
       {busyEvents?.length > 0 && (
         <p className="day-card-busy" title={busyEvents.join(' · ')}>
@@ -198,7 +198,7 @@ export default function DayCard({
       ) : (
         <div className="meal-slot meal-slot-empty">
           <p className="meal-slot-invite note">
-            {mood ? INVITES[mood.key] : 'Nothing planned yet.'}
+            Nothing planned yet.
           </p>
           <div className="meal-slot-actions">
             <Menu label="Suggest ▾" className="btn btn-sm btn-primary">{sourceItems}</Menu>

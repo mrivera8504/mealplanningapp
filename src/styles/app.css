@@ -281,6 +281,28 @@
   margin-top: var(--sp-1);
 }
 
+.week-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  background: var(--basil-wash);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.week-notice .note {
+  color: var(--basil-deep);
+}
+
+.week-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
 .week-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -356,6 +378,10 @@
   font-size: var(--text-sm);
   border-bottom: 1px dotted var(--rule-strong);
   padding-bottom: var(--sp-2);
+}
+
+.day-card-mood::first-letter {
+  text-transform: uppercase;
 }
 
 .day-card-busy {
@@ -1740,4 +1766,12 @@
   .grocery-view {
     max-width: none;
   }
+}
+
+.settings-warning {
+  font-size: var(--text-sm);
+  color: var(--paprika-deep);
+  background: var(--paprika-wash);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2);
 }
