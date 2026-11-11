@@ -1180,6 +1180,57 @@
   min-width: 0;
 }
 
+/* Sorting */
+.grocery-sortbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.grocery-sort-hint {
+  font-size: var(--text-xs);
+}
+
+.grocery-group + .grocery-group {
+  margin-top: var(--sp-4);
+}
+
+.grocery-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-md);
+  border-bottom: 2px solid var(--rule-strong);
+  padding-bottom: var(--sp-1);
+}
+
+.grocery-section-move,
+.grocery-move {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.grocery-section-select {
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  max-width: 9.5rem;
+}
+
+.grocery-row-movable {
+  cursor: grab;
+}
+
+.grocery-row-drop {
+  box-shadow: inset 0 2px 0 var(--paprika);
+}
+
 /* Walmart matching */
 .grocery-row {
   flex-wrap: wrap;
@@ -1755,6 +1806,10 @@
   .grocery-add,
   .grocery-walmart,
   .grocery-edit,
+  .grocery-sortbar,
+  .grocery-section-move,
+  .grocery-section-select,
+  .grocery-move,
   .toast-stack {
     display: none !important;
   }

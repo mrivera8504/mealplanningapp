@@ -3,6 +3,7 @@
  * Normalizes Spoonacular's shapes into the app's single recipe format:
  * { id, spoonacularId, title, image, categories, cuisine, diets,
  *   readyInMinutes, servings, summary, ingredients, steps, nutrition, sourceUrl }
+ * Each ingredient keeps Spoonacular's store aisle, which the grocery list sorts by.
  */
 
 const DISH_TYPE_TO_CATEGORY = {
@@ -61,6 +62,7 @@ export function normalizeRecipe(raw) {
       amount: ing.measures?.us?.amount ?? ing.amount ?? null,
       unit: ing.measures?.us?.unitShort ?? ing.unit ?? '',
       original: ing.original,
+      aisle: ing.aisle || null,
     })),
     steps: (raw.analyzedInstructions?.[0]?.steps || []).map((s) => s.step),
     nutrition: nutrients.length
