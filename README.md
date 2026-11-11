@@ -1,13 +1,14 @@
 # What's for Dinner
 
-A weekly meal planner that reads the weather, finds the right recipe, and puts dinner on your calendar. Cold rain on Thursday? It suggests a braise. Sunny and 88° on Saturday? Grill night.
+A weekly meal planner that keeps dinner varied, shows the weather, and puts dinner on your calendar. Ask it to plan for the forecast and cold rain on Thursday gets a braise; sunny and 88° on Saturday is grill night.
 
 Built with React + Vite, hand-rolled CSS (no framework), Firebase (Auth + Firestore), Open-Meteo, Spoonacular (proxied through a Netlify Function), and the Google Calendar API. Hosted on Netlify.
 
 ## How it works
 
 - **The weekly spread** — all 7 days as a printed-menu-card layout. Each day shows a weather stamp (Open-Meteo forecast), the *why* of the suggestion ("soup weather", "grill weather"), and the planned dinner. Drag meals between days, or use the Move menu on a phone.
-- **Suggestions** — the day's high temp + precipitation map to cooking categories (cold & wet → soup/stew/braise; hot & dry → grill/salad/cold prep). Suggestions draw from your saved recipes first, then the built-in house collection of 18 hand-written dinners.
+- **Suggestions** — each night's pick is drawn at random from the best few candidates, scored on how long since the recipe was last on the plan, whether you recently passed on it ("Another idea" is remembered for two weeks), and how different it is from the dinners around it. Nothing repeats inside two weeks while the pool allows. Suggestions draw from your own recipes, saved recipes, the built-in house collection of 18 dinners, and a library of Spoonacular recipes that grows by a batch each week.
+- **Weather, on request** — the forecast shows on every night but only shapes the menu when you ask: "Fill for the weather" for the week, or "For this weather" on a single night (cold & wet → soup/stew/braise; hot & dry → grill/salad/cold prep).
 - **Your recipe book** — add your own recipes (structured ingredients so the grocery list can merge them), edit or delete them under Recipes → My recipes, fill whole weeks from them with "Fill from my recipes," and swap them onto any night.
 - **Takeout nights** — every day's Suggest/Swap menu includes "Takeout…": a weather-aware idea deck (ramen on rainy nights, poke in a heat wave) you can accept or pass on. Takeout nights skip the grocery list and sync to the calendar as a night off.
 - **Recipe search** — Spoonacular search by name, cuisine, diet, or "use what I have" ingredients mode. The API key lives only in a Netlify Function (`netlify/functions/spoonacular.mts`) — it never ships to the browser. Without a key, search gracefully falls back to the house collection.
@@ -23,6 +24,7 @@ Tip: append `?demo=1` to the URL to see a varied demo forecast without granting 
 npm install
 cp .env.example .env   # fill in what you have; the app degrades gracefully
 npx netlify dev        # serves Vite + the Spoonacular function proxy
+npm test               # unit tests for the suggestion engine and recipe library
 # or: npm run dev      # app only — recipe search uses the house collection
 ```
 

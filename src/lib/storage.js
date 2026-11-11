@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore'
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './firebase'
 
@@ -100,6 +100,24 @@ export function makeRepo(user) {
       async saveDiscovery(batch) {
         await setDoc(userDoc(uid, 'meta', 'discovery'), batch)
       },
+      // The library of outside recipes: one document each, so it can grow
+      // past what a single document holds.
+      async loadLibrary() {
+        const snap = await getDocs(collection(db, 'users', uid, 'library'))
+        return snap.docs.map((d) => d.data())
+      },
+      async saveLibraryRecipes(recipes) {
+        if (!recipes.length) return
+        const batch = writeBatch(db)
+        for (const r of recipes) batch.set(userDoc(uid, 'library', r.id), r)
+        await batch.commit()
+      },
+      async removeLibraryRecipes(ids) {
+        if (!ids.length) return
+        const batch = writeBatch(db)
+        for (const id of ids) batch.delete(userDoc(uid, 'library', id))
+        await batch.commit()
+      },
       async loadWalmart() {
         const snap = await getDoc(userDoc(uid, 'meta', 'walmart'))
         return snap.exists() ? snap.data() : null
@@ -184,6 +202,20 @@ export function makeRepo(user) {
     },
     async saveDiscovery(batch) {
       lsSet('discovery', batch)
+    },
+    async loadLibrary() {
+      return lsGet('library') || []
+    },
+    async saveLibraryRecipes(recipes) {
+      if (!recipes.length) return
+      const ids = new Set(recipes.map((r) => r.id))
+      const library = lsGet('library') || []
+      lsSet('library', [...library.filter((r) => !ids.has(r.id)), ...recipes])
+    },
+    async removeLibraryRecipes(ids) {
+      if (!ids.length) return
+      const drop = new Set(ids)
+      lsSet('library', (lsGet('library') || []).filter((r) => !drop.has(r.id)))
     },
     async loadWalmart() {
       return lsGet('walmart')

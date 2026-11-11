@@ -3,6 +3,9 @@ import { geocodeCity } from '../lib/weather'
 import { calendarConfigured, getAccessToken, listCalendars } from '../lib/calendar'
 import { useSettings } from '../context/SettingsContext'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
+import { describeRefillError } from '../lib/library'
+import { fmtShort } from '../lib/dates'
 
 export default function SettingsModal({ onClose }) {
   const { settings, update } = useSettings()
@@ -13,6 +16,16 @@ export default function SettingsModal({ onClose }) {
   const [calendars, setCalendars] = useState(null)
   const [loadingCalendars, setLoadingCalendars] = useState(false)
   const firstField = useRef(null)
+  const { repo } = useAuth()
+  const [ideas, setIdeas] = useState(null) // { lastFetchAt, lastError } from the last library refill
+
+  useEffect(() => {
+    let alive = true
+    repo.loadDiscovery().then((meta) => alive && setIdeas(meta || {}))
+    return () => {
+      alive = false
+    }
+  }, [repo])
 
   useEffect(() => {
     firstField.current?.focus()
@@ -118,8 +131,17 @@ export default function SettingsModal({ onClose }) {
         <section className="settings-section">
           <h3 className="overline">New ideas each week</h3>
           <p className="muted">
-            Fresh Spoonacular recipes mixed in alongside yours. Fetched once a week; 0 turns this off.
+            The most Spoonacular recipes a week that suggestions may mix in alongside yours. The app collects a
+            fresh batch about once a week and keeps them; 0 turns this off.
           </p>
+          {ideas?.lastError ? (
+            <p className="settings-warning" role="status">
+              The last refresh failed: {describeRefillError(ideas.lastError)}.
+              {ideas.lastFetchAt ? ` Last updated ${fmtShort(new Date(ideas.lastFetchAt))}.` : ' Nothing has been collected yet.'}
+            </p>
+          ) : (
+            ideas?.lastFetchAt && <p className="muted">New ideas last updated {fmtShort(new Date(ideas.lastFetchAt))}.</p>
+          )}
           <div className="seg" role="radiogroup" aria-label="New ideas per week">
             {[0, 1, 2, 3].map((n) => (
               <button

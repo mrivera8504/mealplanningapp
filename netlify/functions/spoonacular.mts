@@ -69,7 +69,8 @@ export default async (req: Request, context: Context) => {
     status: 200,
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": id === "random" ? "no-store" : "public, max-age=300",
+      // Random results must never be served from cache, or every refill would repeat the last one.
+      "Cache-Control": id === "random" || inUrl.searchParams.get("sort") === "random" ? "no-store" : "public, max-age=300",
     },
   });
 };

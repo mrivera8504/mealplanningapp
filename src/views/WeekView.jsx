@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DayCard from '../components/DayCard'
 import RecipeDetail from '../components/RecipeDetail'
@@ -10,12 +10,16 @@ import { useWeather } from '../hooks/useWeather'
 import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
 import { useRotation } from '../context/RotationContext'
-import { useDiscovery } from '../hooks/useDiscovery'
+import { useLibrary } from '../hooks/useLibrary'
 import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates } from '../lib/dates'
 import MealPicker from '../components/MealPicker'
-import { buildPool, servedDates, suggestForDay } from '../lib/suggestions'
+import { buildPool, plannedNights, servedDates, styleOf, suggestForDay } from '../lib/suggestions'
+import { describeRefillError } from '../lib/library'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
+
+// The failed-refill warning shows once per session, not on every visit to this view.
+let warnedRefill = false
 
 export default function WeekView({ onOpenSettings }) {
   const navigate = useNavigate()
@@ -32,32 +36,49 @@ export default function WeekView({ onOpenSettings }) {
   const [takeoutFor, setTakeoutFor] = useState(null) // {iso, name}
   const [pickerFor, setPickerFor] = useState(null)   // {iso, name}
   const [pendingSaves, setPendingSaves] = useState({}) // iso -> recipe not yet saved/dismissed
+  // { nights } left empty because the recipe book has nothing that's rested two weeks.
+  const [shortfall, setShortfall] = useState(null)
   const { prefs, setPref } = useRotation()
   const newIdeasPerWeek = settings.newIdeasPerWeek ?? 2
-  const discovery = useDiscovery(newIdeasPerWeek > 0)
+  const library = useLibrary(newIdeasPerWeek > 0, { ready: !loading, saved, mine, prefs, plan })
   // iso -> ids swapped away from that night this session, so "Another idea"
   // walks forward through the options instead of bouncing between two.
   const swappedAway = useRef({})
 
   const days = useMemo(() => weekDates(startIso), [startIso])
-  const pool = useMemo(() => buildPool(saved, mine, discovery), [saved, mine, discovery])
+  const pool = useMemo(() => buildPool(saved, mine, library.recipes), [saved, mine, library.recipes])
   const history = useMemo(() => servedDates(plan), [plan])
+  const nights = useMemo(() => plannedNights(plan), [plan])
   const todayIso = toISODate(new Date())
+
+  // Say so, once per session, when the weekly top-up of new ideas is failing --
+  // otherwise the same outside recipes quietly come around forever.
+  const refillError = library.status?.lastError
+  useEffect(() => {
+    if (!refillError || warnedRefill) return
+    warnedRefill = true
+    toast(`New recipe ideas couldn't be refreshed: ${describeRefillError(refillError)}. Details are in Settings.`, 'warn')
+  }, [refillError, toast])
 
   const plannedIds = () =>
     new Set(days.map((d) => plan.days[d.iso]?.dinner?.id).filter(Boolean))
 
   const discoveryCount = () => days.filter((d) => plan.days[d.iso]?.dinner?.isDiscovery).length
 
-  /** Drop discovery recipes from `fromPool` once this week has its share of new ideas. */
+  /** Drop library recipes from `fromPool` once this week has its share of new ideas. */
   const capDiscovery = (fromPool, alreadyThisWeek = discoveryCount()) =>
     alreadyThisWeek >= newIdeasPerWeek ? fromPool.filter((r) => !r.isDiscovery) : fromPool
 
-  const suggest = (iso, fromPool, exclude, fromHistory = history) =>
-    suggestForDay(forecast?.[iso], iso, fromPool, { exclude, history: fromHistory, prefs })
+  const suggest = (iso, fromPool, exclude, opts = {}) =>
+    suggestForDay(forecast?.[iso], iso, fromPool, { exclude, history, nights, prefs, ...opts })
 
-  const pickMeal = (iso, recipe) => {
-    setMeal(iso, recipe)
+  /**
+   * Put a recipe on a night. `mood` is passed only for a weather pick, and is
+   * remembered on the meal so the card can say why it was chosen.
+   */
+  const pickMeal = (iso, recipe, mood = null) => {
+    const { pickedFor: _for, weatherNote: _note, ...clean } = recipe
+    setMeal(iso, mood ? { ...clean, pickedFor: 'weather', weatherNote: mood.note } : clean)
     setPendingSaves((p) => {
       if (!recipe.isHouseRecipe && !recipe.isDiscovery) {
         if (!(iso in p)) return p
@@ -99,6 +120,7 @@ export default function WeekView({ onOpenSettings }) {
     if (!recipe) return
 
     setPref(recipe.id, { dismissed: true }).catch(() => {})
+    if (recipe.isDiscovery) library.remove(recipe.id)
 
     const exclude = plannedIds()
     exclude.add(recipe.id)
@@ -129,25 +151,29 @@ export default function WeekView({ onOpenSettings }) {
     })
   }
 
-  const suggestFor = (iso, fromPool = pool) => {
-    const result = suggest(iso, capDiscovery(fromPool), plannedIds())
-    if (result) pickMeal(iso, result.recipe)
-    else toast('Nothing left to suggest for that night -- check snoozed recipes or add more of your own.', 'warn')
-  }
-
-  const swapFor = (iso, fromPool = pool) => {
+  /**
+   * Suggest a dinner for one night, replacing whatever is there. The meal
+   * being replaced is remembered as passed over (synced, for two weeks) so it
+   * doesn't come straight back -- on this night or any other. `weather` lets
+   * the forecast shape the pick; without it weather plays no part.
+   */
+  const swapFor = (iso, fromPool = pool, { weather = false } = {}) => {
     const current = plan.days[iso]?.dinner
     const skipped = (swappedAway.current[iso] ||= new Set())
-    if (current) skipped.add(current.id)
-    // The night's own discovery pick doesn't count against the weekly share when swapping it out.
+    if (current) {
+      skipped.add(current.id)
+      if (!current.takeout) setPref(current.id, { passedOn: todayIso }).catch(() => {})
+    }
+    // The night's own library pick doesn't count against the weekly share when swapping it out.
     const candidates = capDiscovery(fromPool, discoveryCount() - (current?.isDiscovery ? 1 : 0))
-    let result = suggest(iso, candidates, new Set([...plannedIds(), ...skipped]))
+    const opts = { useWeather: weather }
+    let result = suggest(iso, candidates, new Set([...plannedIds(), ...skipped]), opts)
     if (!result && skipped.size > 1) {
       // Every option has been passed over -- start the cycle again.
       swappedAway.current[iso] = new Set(current ? [current.id] : [])
-      result = suggest(iso, candidates, new Set([...plannedIds(), ...swappedAway.current[iso]]))
+      result = suggest(iso, candidates, new Set([...plannedIds(), ...swappedAway.current[iso]]), opts)
     }
-    if (result) pickMeal(iso, result.recipe)
+    if (result) pickMeal(iso, result.recipe, weather ? result.mood : null)
     else toast('No other ideas for that night -- check snoozed recipes or add more of your own.', 'warn')
   }
 
@@ -159,41 +185,77 @@ export default function WeekView({ onOpenSettings }) {
     swapFor(iso, mine)
   }
 
-  const fillWeek = (fromPool, label) => {
+  /**
+   * Fill every empty night from `fromPool`. Returns { added, left }.
+   * weather: let each night's forecast shape its pick.
+   * restedOnly: leave a night empty rather than repeat something from the
+   *   last two weeks (the caller then offers what to do about those nights).
+   */
+  const fillWeek = (fromPool, label, { weather = false, restedOnly = false } = {}) => {
     const exclude = plannedIds()
     let newIdeas = discoveryCount()
     let added = 0
+    let left = 0
     // Picks made in this loop aren't in the plan state yet; track them here so
-    // freshness sees them.
+    // freshness and variety see them.
     const fillHistory = new Map([...history].map(([id, dates]) => [id, [...dates]]))
+    const fillNights = new Map(nights)
     for (const d of days) {
       if (plan.days[d.iso]?.dinner) continue
       const candidates = capDiscovery(fromPool, newIdeas)
+      const opts = { history: fillHistory, nights: fillNights, useWeather: weather, restedOnly }
       // If the pool runs dry (small recipe books), allow repeats within the
       // week -- freshness scoring still keeps them spread apart.
       const result =
-        suggest(d.iso, candidates, exclude, fillHistory) || suggest(d.iso, candidates, new Set(), fillHistory)
-      if (result) {
-        pickMeal(d.iso, result.recipe)
-        exclude.add(result.recipe.id)
-        fillHistory.set(result.recipe.id, [...(fillHistory.get(result.recipe.id) || []), d.iso])
-        if (result.recipe.isDiscovery) newIdeas += 1
-        added += 1
+        suggest(d.iso, candidates, exclude, opts) || (restedOnly ? null : suggest(d.iso, candidates, new Set(), opts))
+      if (!result) {
+        left += 1
+        continue
       }
+      const { recipe } = result
+      pickMeal(d.iso, recipe, weather ? result.mood : null)
+      exclude.add(recipe.id)
+      fillHistory.set(recipe.id, [...(fillHistory.get(recipe.id) || []), d.iso])
+      fillNights.set(d.iso, { id: recipe.id, cuisine: recipe.cuisine || null, style: styleOf(recipe) })
+      if (recipe.isDiscovery) newIdeas += 1
+      added += 1
     }
-    if (added > 0) toast(`Planned ${added} night${added > 1 ? 's' : ''} ${label}.`)
-    return added
+    if (added > 0) toast(`Planned ${added} night${added > 1 ? 's' : ''}${label}.`)
+    return { added, left }
   }
 
-  const planWholeWeek = () => fillWeek(pool, 'around the forecast')
+  const planWholeWeek = () => {
+    setShortfall(null)
+    const { added } = fillWeek(pool, '')
+    if (added === 0) toast('No empty nights to fill -- clear a night first.')
+  }
 
+  const planWeekForWeather = () => {
+    setShortfall(null)
+    if (!forecast) {
+      toast('No forecast yet -- set your location in Settings first.', 'warn')
+      return
+    }
+    const { added } = fillWeek(pool, ' around the forecast', { weather: true })
+    if (added === 0) toast('No empty nights to fill -- clear a night first.')
+  }
+
+  // A small recipe book can't fill week after week without repeating: 14
+  // recipes over 7 nights is a two-week loop. So fill what can be filled with
+  // dinners that have rested, and ask about the rest instead of repeating quietly.
   const planWeekFromMine = () => {
     if (!mine.length) {
       toast('Your recipe book is empty -- add one under Recipes → My recipes.', 'warn')
       return
     }
-    const added = fillWeek(mine, 'from your recipe book')
-    if (added === 0) toast('No empty nights to fill -- clear a night first.')
+    const { added, left } = fillWeek(mine, ' from your recipe book', { restedOnly: true })
+    setShortfall(left > 0 ? { nights: left } : null)
+    if (added === 0 && left === 0) toast('No empty nights to fill -- clear a night first.')
+  }
+
+  const fillShortfall = (fromPool, label) => {
+    setShortfall(null)
+    fillWeek(fromPool, label)
   }
 
   const savePlan = async () => {
@@ -245,6 +307,7 @@ export default function WeekView({ onOpenSettings }) {
 
   const shiftWeek = (delta) => {
     setBusyNights(null)
+    setShortfall(null)
     setStartIso(toISODate(addDays(fromISODate(startIso), delta * 7)))
   }
 
@@ -272,7 +335,7 @@ export default function WeekView({ onOpenSettings }) {
 
         <p className="week-weather-note note">
           {weatherStatus === 'ready'
-            ? `Forecast for ${location?.name || 'the demo week'} is setting tonight's menu.`
+            ? `Forecast for ${location?.name || 'the demo week'}. It only shapes the menu when you ask it to.`
             : weatherStatus === 'locating' || weatherStatus === 'loading'
               ? 'Reading the sky…'
               : (
@@ -281,7 +344,7 @@ export default function WeekView({ onOpenSettings }) {
                   <button type="button" className="link-inline" onClick={onOpenSettings}>
                     set your location
                   </button>{' '}
-                  and the weather will pick your menu.
+                  to see the weather for each night.
                 </>
               )}
         </p>
@@ -289,6 +352,9 @@ export default function WeekView({ onOpenSettings }) {
         <div className="week-actions">
           <button type="button" className="btn btn-secondary" onClick={planWholeWeek}>
             Fill empty nights
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={planWeekForWeather} title="Fills empty nights with dinners that suit each night's forecast">
+            Fill for the weather
           </button>
           <button type="button" className="btn btn-secondary" onClick={planWeekFromMine} title="Only suggests from your own recipe book">
             Fill from my recipes
@@ -309,6 +375,26 @@ export default function WeekView({ onOpenSettings }) {
         </div>
       </div>
 
+      {shortfall && (
+        <div className="week-notice" role="status">
+          <p className="note">
+            Your recipe book has {mine.length} recipe{mine.length === 1 ? '' : 's'}, and everything else in it was on the
+            plan in the last two weeks. {shortfall.nights} night{shortfall.nights > 1 ? 's are' : ' is'} still empty.
+          </p>
+          <div className="week-notice-actions">
+            <button type="button" className="btn btn-basil btn-sm" onClick={() => fillShortfall(pool, '')}>
+              Fill from all my lists
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => fillShortfall(mine, ' from your recipe book')}>
+              Repeat from my recipes
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShortfall(null)}>
+              Leave empty
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="week-grid">
         {days.map((d) => (
           <DayCard
@@ -320,7 +406,8 @@ export default function WeekView({ onOpenSettings }) {
             otherDays={days.filter((x) => x.iso !== d.iso)}
             hasMine={mine.length > 0}
             unit={unit}
-            onSuggest={() => suggestFor(d.iso)}
+            onSuggest={() => swapFor(d.iso)}
+            onWeatherPick={() => swapFor(d.iso, pool, { weather: true })}
             onSuggestMine={() => suggestMineFor(d.iso)}
             onTakeout={() => setTakeoutFor({ iso: d.iso, name: d.name })}
             onSwap={() => swapFor(d.iso)}
@@ -339,11 +426,16 @@ export default function WeekView({ onOpenSettings }) {
         <div className="week-empty">
           <p className="note week-empty-line">A blank week is a good week -- let's fill it.</p>
           <p className="muted">
-            Tap <strong>Suggest a meal</strong> on any night, or let the forecast plan the whole spread.
+            Tap <strong>Suggest</strong> on any night, or fill the whole spread at once.
           </p>
-          <button type="button" className="btn btn-primary" onClick={planWholeWeek}>
-            Plan my week around the weather
-          </button>
+          <div className="week-actions">
+            <button type="button" className="btn btn-primary" onClick={planWholeWeek}>
+              Fill my week
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={planWeekForWeather}>
+              Fill for the weather
+            </button>
+          </div>
         </div>
       )}
 
