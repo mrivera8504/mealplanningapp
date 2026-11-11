@@ -235,7 +235,7 @@ export default function IngredientsView() {
       ) : (
         <div className="ingredients-table" role="table" aria-label="Ingredients">
           <div className="ingredients-row ingredients-row-head" role="row">
-            <span role="columnheader" className="sr-only">Select</span>
+            <span role="columnheader" aria-label="Select" />
             <span role="columnheader">Ingredient</span>
             <span role="columnheader">Section</span>
             <span role="columnheader">Walmart product</span>
@@ -379,7 +379,7 @@ function IngredientRow({ row, selected, onSelect, onSection, onPick, onQty, onSk
         )}
       </span>
 
-      <span role="cell" className="ingredients-cell-qty">
+      <span role="cell" className={`ingredients-cell-qty${match?.product ? '' : ' ingredients-cell-empty'}`}>
         {match?.product ? (
           <span className="walmart-qty" aria-label="Quantity">
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(match.qty - 1)} disabled={match.qty <= 1} aria-label="One fewer">

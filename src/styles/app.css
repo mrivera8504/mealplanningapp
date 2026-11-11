@@ -2016,4 +2016,14 @@
   .ingredients-cell-product { grid-area: product; }
   .ingredients-cell-qty { grid-area: qty; }
   .ingredients-cell-status { grid-area: status; }
+  .ingredients-cell-empty { display: none; }
+}
+
+/* Four tabs don't fit a phone at full size: tighten them so all stay visible. */
+@media (max-width: 520px) {
+  .masthead-nav .tab {
+    font-size: var(--text-sm);
+    padding: 0.45rem 0.7rem 0.5rem;
+    white-space: nowrap;
+  }
 }
