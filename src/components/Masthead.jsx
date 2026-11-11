@@ -24,6 +24,9 @@ export default function Masthead({ onOpenAuth, onOpenSettings }) {
           <NavLink to="/groceries" className={({ isActive }) => `tab${isActive ? ' tab-active' : ''}`}>
             Groceries
           </NavLink>
+          <NavLink to="/ingredients" className={({ isActive }) => `tab${isActive ? ' tab-active' : ''}`}>
+            Ingredients
+          </NavLink>
         </nav>
 
         <div className="masthead-side">

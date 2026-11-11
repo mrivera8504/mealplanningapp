@@ -7,7 +7,7 @@ import { useWalmartProducts } from '../hooks/useWalmartProducts'
 import { useIngredients } from '../hooks/useIngredients'
 import { useSettings } from '../context/SettingsContext'
 import WalmartPicker, { ProductLine } from '../components/WalmartPicker'
-import { buildGroceryItems, normalizeName } from '../lib/grocery'
+import { buildGroceryItems, canonicalKey, normalizeName } from '../lib/grocery'
 import { walmartCartUrl } from '../lib/walmart'
 import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
 import { SORT_MODES, arrangeRows, moveInOrder, shiftSection } from '../lib/groceryOrder'
@@ -48,7 +48,13 @@ export default function GroceryView() {
     [plan, startIso]
   )
 
-  const items = useMemo(() => buildGroceryItems(meals, renames), [meals, renames])
+  const merge = useMemo(() => {
+    const names = {}
+    for (const [key, item] of Object.entries(ingredients.items)) if (item.name) names[key] = item.name
+    return { aliases: ingredients.aliases, names }
+  }, [ingredients.items, ingredients.aliases])
+
+  const items = useMemo(() => buildGroceryItems(meals, renames, merge), [meals, renames, merge])
 
   useEffect(() => {
     let alive = true
@@ -125,7 +131,7 @@ export default function GroceryView() {
     ...items.map((it) => ({ ...it, matchKey: it.key, extra: false })),
     ...state.extras.map((x) => ({
       key: x.key,
-      matchKey: normalizeName(x.name) || x.key,
+      matchKey: canonicalKey(normalizeName(x.name), ingredients.aliases) || x.key,
       name: x.name,
       aisle: null,
       quantities: '',

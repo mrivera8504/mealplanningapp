@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
-const EMPTY = { items: {}, manualOrder: [], sectionOrder: [] }
+const EMPTY = { items: {}, manualOrder: [], sectionOrder: [], aliases: {} }
 
 /**
  * What the household has told the app about its ingredients, keyed by
  * normalized ingredient name (normalizeName in lib/grocery) -- the same key
  * Walmart matches and grocery renames use. One doc, meta/ingredients:
- *   { items: { [key]: { section? } }, manualOrder: [key], sectionOrder: [section] }
+ *   { items: { [key]: { section?, name?, addedByHand? } }, manualOrder: [key],
+ *     sectionOrder: [section], aliases: { [mergedKey]: keptKey } }
  */
 export function useIngredients() {
   const { repo } = useAuth()
@@ -20,7 +21,7 @@ export function useIngredients() {
     let alive = true
     repo.loadIngredients().then((doc) => {
       if (!alive) return
-      setData({ ...EMPTY, ...(doc || {}), items: { ...(doc?.items || {}) } })
+      setData({ ...EMPTY, ...(doc || {}), items: { ...(doc?.items || {}) }, aliases: { ...(doc?.aliases || {}) } })
       setLoaded(true)
     })
     return () => {
