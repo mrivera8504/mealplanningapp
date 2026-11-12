@@ -52,8 +52,8 @@ export function normalizeRecipe(raw, course) {
     return n ? `${Math.round(n.amount)}${n.unit === 'kcal' ? '' : n.unit}` : null
   }
   return {
-    id: `sp-${raw.id}`,
-    spoonacularId: raw.id,
+    id: raw.id != null ? `sp-${raw.id}` : `web-${Date.now()}`,
+    spoonacularId: raw.id ?? null,
     title: raw.title,
     image: raw.image || null,
     categories: categoriesFrom(raw),
@@ -122,9 +122,12 @@ export async function getRecipeDetail(spoonacularId) {
   return detail
 }
 
-/** Extract a recipe from an arbitrary URL via Spoonacular. */
-export async function extractRecipeFromUrl(url) {
-  const data = await call('/extract', { url })
+/**
+ * A recipe from a web page: read from the page's own recipe block when it has
+ * one (free), otherwise via Spoonacular. `hint` picks among several on a page.
+ */
+export async function extractRecipeFromUrl(url, hint) {
+  const data = await call('/extract', hint ? { url, hint: hint.slice(0, 200) } : { url })
   return normalizeRecipe(data)
 }
 

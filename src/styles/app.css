@@ -1179,6 +1179,60 @@
   align-self: flex-start;
 }
 
+.takeout-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.takeout-add .input {
+  flex: 1 1 10rem;
+}
+
+.takeout-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.takeout-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: 40px;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--text-sm);
+}
+
+.takeout-item:last-child {
+  border-bottom: none;
+}
+
+.takeout-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+}
+
+.takeout-toggle input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--primary);
+}
+
+.takeout-builtins summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--primary-text);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
 .settings-time {
   align-self: flex-start;
 }
@@ -2426,4 +2480,76 @@
 
 .recipe-course-row {
   margin-top: var(--sp-3);
+}
+
+/* ---------- Pinterest import ---------- */
+.pinterest-import {
+  max-width: 860px;
+}
+
+.pinterest-import h2 {
+  margin-bottom: var(--sp-1);
+}
+
+.pinterest-board-form {
+  display: flex;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+
+.pinterest-board-form .input {
+  flex: 1;
+}
+
+.pinterest-board-name {
+  margin-bottom: var(--sp-3);
+}
+
+.pin-grid {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--sp-3);
+}
+
+.pin-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.pin-image {
+  display: block;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--tile);
+}
+
+.pin-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pin-title {
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pin-error {
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+.mine-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
 }

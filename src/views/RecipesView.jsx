@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import RecipeCard from '../components/RecipeCard'
 import RecipeDetail from '../components/RecipeDetail'
 import RecipeEditor from '../components/RecipeEditor'
+import PinterestImport from '../components/PinterestImport'
+import { useSettings } from '../context/SettingsContext'
 import DayPicker from '../components/DayPicker'
 import { useSavedRecipes } from '../hooks/useSavedRecipes'
 import { useMyRecipes } from '../hooks/useMyRecipes'
@@ -63,6 +65,9 @@ export default function RecipesView() {
   const [viewing, setViewing] = useState(null)
   const [placing, setPlacing] = useState(null) // recipe awaiting a day pick
   const [editing, setEditing] = useState(null) // null | 'new' | recipe
+  const [draft, setDraft] = useState(null) // { recipe, pin } imported from Pinterest, waiting in the editor
+  const [pinterestOpen, setPinterestOpen] = useState(false)
+  const { settings, update: updateSettings } = useSettings()
 
   useEffect(() => {
     document.title = "Recipes · What's for Dinner"
@@ -259,6 +264,9 @@ export default function RecipesView() {
           <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
             Add a recipe
           </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setPinterestOpen(true)}>
+            Import from Pinterest
+          </button>
         </div>
       )}
 
@@ -362,14 +370,35 @@ export default function RecipesView() {
       {editing && (
         <RecipeEditor
           recipe={editing === 'new' ? null : editing}
+          draft={editing === 'new' ? draft?.recipe : null}
           onSave={(recipe) => {
             upsertMine(recipe)
             toast(editing === 'new' ? `${recipe.title} added to your recipe book.` : 'Recipe updated.')
+            if (draft?.pin) {
+              const done = new Set(settings.pinterestImported || [])
+              done.add(draft.pin.id)
+              updateSettings({ pinterestImported: [...done] })
+            }
             setEditing(null)
+            setDraft(null)
           }}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null)
+            setDraft(null)
+          }}
           user={user}
           defaultCourse={course}
+        />
+      )}
+
+      {pinterestOpen && (
+        <PinterestImport
+          onClose={() => setPinterestOpen(false)}
+          onImport={(recipe, pin) => {
+            setPinterestOpen(false)
+            setDraft({ recipe, pin })
+            setEditing('new')
+          }}
         />
       )}
     </div>

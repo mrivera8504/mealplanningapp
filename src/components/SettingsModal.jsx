@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { describeRefillError } from '../lib/library'
 import { fmtShort } from '../lib/dates'
+import { TAKEOUT_IDEAS, customIdea } from '../lib/takeout'
 
 export default function SettingsModal({ onClose }) {
   const { settings, update, themeMode } = useSettings()
@@ -180,6 +181,8 @@ export default function SettingsModal({ onClose }) {
           </div>
         </section>
 
+        <TakeoutSettings settings={settings} update={update} toast={toast} />
+
         <section className="settings-section">
           <h3 className="overline">Dinner time (for calendar events)</h3>
           <input
@@ -233,5 +236,79 @@ export default function SettingsModal({ onClose }) {
         )}
       </div>
     </div>
+  )
+}
+
+/** Takeout ideas: add your own places, and turn off built-ins you never order. */
+function TakeoutSettings({ settings, update, toast }) {
+  const prefs = { custom: [], hidden: [], ...(settings.takeout || {}) }
+  const [name, setName] = useState('')
+  const [note, setNote] = useState('')
+  const save = (patch) => update({ takeout: { ...prefs, ...patch } })
+
+  const add = (e) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    const idea = customIdea(name, note)
+    if (prefs.custom.some((c) => c.id === idea.id) || TAKEOUT_IDEAS.some((t) => t.title.toLowerCase() === idea.title.toLowerCase())) {
+      toast(`${idea.title} is already on the list.`)
+      return
+    }
+    save({ custom: [...prefs.custom, idea] })
+    setName('')
+    setNote('')
+  }
+
+  const toggleBuiltIn = (id) =>
+    save({ hidden: prefs.hidden.includes(id) ? prefs.hidden.filter((h) => h !== id) : [...prefs.hidden, id] })
+
+  return (
+    <section className="settings-section">
+      <h3 className="overline">Takeout ideas</h3>
+      <p className="muted">What "Takeout night" suggests. Add the places you actually order from, and untick any you don't.</p>
+
+      <form className="takeout-add" onSubmit={add}>
+        <input className="input" placeholder="Place or dish, e.g. Mama's Pho" value={name} onChange={(e) => setName(e.target.value)} aria-label="Takeout idea" />
+        <input className="input" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note for this idea" />
+        <button type="submit" className="btn btn-soft" disabled={!name.trim()}>
+          Add
+        </button>
+      </form>
+
+      {prefs.custom.length > 0 && (
+        <ul className="takeout-list">
+          {prefs.custom.map((c) => (
+            <li key={c.id} className="takeout-item">
+              <span>
+                <strong>{c.title}</strong>
+                {c.blurb && <span className="muted"> · {c.blurb}</span>}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => save({ custom: prefs.custom.filter((x) => x.id !== c.id) })}
+                aria-label={`Remove ${c.title}`}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <details className="takeout-builtins">
+        <summary>Built-in ideas ({TAKEOUT_IDEAS.length - prefs.hidden.filter((h) => TAKEOUT_IDEAS.some((t) => t.id === h)).length} of {TAKEOUT_IDEAS.length} on)</summary>
+        <ul className="takeout-list">
+          {TAKEOUT_IDEAS.map((t) => (
+            <li key={t.id} className="takeout-item">
+              <label className="takeout-toggle">
+                <input type="checkbox" checked={!prefs.hidden.includes(t.id)} onChange={() => toggleBuiltIn(t.id)} />
+                {t.title}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
   )
 }

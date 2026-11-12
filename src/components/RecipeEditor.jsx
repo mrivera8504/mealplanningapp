@@ -10,22 +10,24 @@ const EMPTY_ING = { amount: '', unit: '', name: '' }
  * Create or edit a personal recipe. Ingredients are structured rows so the
  * grocery list can merge quantities; steps are one per line.
  */
-export default function RecipeEditor({ recipe, onSave, onClose, user, defaultCourse = 'main' }) {
+export default function RecipeEditor({ recipe, draft, onSave, onClose, user, defaultCourse = 'main' }) {
+  // `recipe` edits a saved one; `draft` starts a new one pre-filled (an import, say).
   const editing = Boolean(recipe)
-  const [title, setTitle] = useState(recipe?.title || '')
-  const [minutes, setMinutes] = useState(recipe?.readyInMinutes || '')
-  const [servings, setServings] = useState(recipe?.servings || '')
-  const [cuisine, setCuisine] = useState(recipe?.cuisine || '')
-  const [course, setCourse] = useState(recipe ? courseOf(recipe) : defaultCourse)
-  const [categories, setCategories] = useState(recipe?.categories || [])
+  const base = recipe || draft || null
+  const [title, setTitle] = useState(base?.title || '')
+  const [minutes, setMinutes] = useState(base?.readyInMinutes || '')
+  const [servings, setServings] = useState(base?.servings || '')
+  const [cuisine, setCuisine] = useState(base?.cuisine || '')
+  const [course, setCourse] = useState(base?.course ? courseOf(base) : recipe ? courseOf(recipe) : defaultCourse)
+  const [categories, setCategories] = useState(base?.categories || [])
   const [ingredients, setIngredients] = useState(
-    recipe?.ingredients?.length
-      ? recipe.ingredients.map((i) => ({ amount: i.amount ?? '', unit: i.unit || '', name: i.name || '' }))
+    base?.ingredients?.length
+      ? base.ingredients.map((i) => ({ amount: i.amount ?? '', unit: i.unit || '', name: i.name || '' }))
       : [{ ...EMPTY_ING }, { ...EMPTY_ING }, { ...EMPTY_ING }]
   )
-  const [stepsText, setStepsText] = useState((recipe?.steps || []).join('\n'))
+  const [stepsText, setStepsText] = useState((base?.steps || []).join('\n'))
   const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(recipe?.image || null)
+  const [imagePreview, setImagePreview] = useState(base?.image || null)
   const [uploading, setUploading] = useState(false)
   const [importUrl, setImportUrl] = useState('')
   const [importing, setImporting] = useState(false)
@@ -98,7 +100,8 @@ export default function RecipeEditor({ recipe, onSave, onClose, user, defaultCou
     }
 
     const recipeId = recipe?.id || `mine-${Date.now()}`
-    let imageUrl = recipe?.image || null
+    // A new photo is uploaded below; otherwise keep whatever is showing (an imported photo, or none if removed).
+    let imageUrl = imageFile ? recipe?.image || null : imagePreview || null
 
     if (imageFile && user) {
       setUploading(true)
@@ -119,14 +122,14 @@ export default function RecipeEditor({ recipe, onSave, onClose, user, defaultCou
       image: imageUrl,
       categories,
       cuisine: cuisine.trim() || null,
-      diets: recipe?.diets || [],
+      diets: base?.diets || [],
       readyInMinutes: minutes === '' ? null : Number(minutes),
       servings: servings === '' ? null : Number(servings),
-      summary: recipe?.summary || '',
-      sourceUrl: null,
+      summary: base?.summary || '',
+      sourceUrl: base?.sourceUrl || null,
       ingredients: cleanIngredients,
       steps: stepsText.split('\n').map((s) => s.trim()).filter(Boolean),
-      nutrition: recipe?.nutrition || null,
+      nutrition: base?.nutrition || null,
     })
   }
 
@@ -139,7 +142,7 @@ export default function RecipeEditor({ recipe, onSave, onClose, user, defaultCou
         <h2>{editing ? 'Edit recipe' : 'Add to your recipe book'}</h2>
 
         <form onSubmit={submit} className="editor-form">
-          {!editing && (
+          {!editing && !draft && (
             <div className="editor-import">
               <div className="editor-import-row">
                 <input
