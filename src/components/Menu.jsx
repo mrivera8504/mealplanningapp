@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 
 const CloseContext = createContext(() => {})
@@ -16,6 +16,9 @@ const CloseContext = createContext(() => {})
  * `label` is the button's text, or its accessible name when `iconOnly`.
  * Children can be a function of `close`, for menus that switch views
  * (like "Move to…") without closing.
+ *
+ * `align` is only a preference: when the menu would run off the screen it
+ * opens toward the side that has room, and upward when there's no room below.
  */
 export default function Menu({
   label,
@@ -30,14 +33,42 @@ export default function Menu({
   buttonContent, // custom button inside (an avatar, say); `label` is then its accessible name
 }) {
   const [open, setOpen] = useState(false)
+  const [fit, setFit] = useState(null) // { side: 'start'|'end'|'pinned', up, shift }
   const wrap = useRef(null)
   const list = useRef(null)
   const id = useId()
 
   const setOpenState = (v) => {
     setOpen(v)
+    if (!v) setFit(null)
     onOpenChange?.(v)
   }
+
+  // Keep the open menu on screen. Measure it where `align` puts it; if it
+  // overflows, try the other side; if neither fits (a narrow phone), pin it
+  // inside the screen edges. Then flip it upward if it would run off the bottom.
+  useLayoutEffect(() => {
+    if (!open || fit || !list.current) return
+    const margin = 8
+    const vw = document.documentElement.clientWidth
+    const vh = window.innerHeight
+    const button = wrap.current.getBoundingClientRect()
+    const menu = list.current.getBoundingClientRect()
+    const fitsStart = button.left + menu.width <= vw - margin
+    const fitsEnd = button.right - menu.width >= margin
+    let side = align
+    let shift = 0
+    if (side === 'start' && !fitsStart) side = fitsEnd ? 'end' : 'pinned'
+    else if (side === 'end' && !fitsEnd) side = fitsStart ? 'start' : 'pinned'
+    if (side === 'pinned') {
+      // Left edge relative to the button, clamped so the whole menu is on screen.
+      const left = Math.min(Math.max(margin, button.left), vw - margin - menu.width)
+      shift = Math.max(margin, left) - button.left
+    }
+    const below = vh - button.bottom
+    const up = menu.height + margin > below && button.top > below
+    setFit({ side, up, shift })
+  }, [open, fit, align])
 
   useEffect(() => {
     if (!open) return undefined
@@ -99,7 +130,8 @@ export default function Menu({
           ref={list}
           role="menu"
           aria-label={menuLabel || label}
-          className={`menu-list menu-list-${align}`}
+          className={`menu-list menu-list-${fit?.side === 'end' ? 'end' : 'start'}${fit?.up ? ' menu-list-up' : ''}`}
+          style={fit ? (fit.side === 'pinned' ? { left: fit.shift } : undefined) : { visibility: 'hidden' }}
           onKeyDown={onListKey}
         >
           <CloseContext.Provider value={close}>{content}</CloseContext.Provider>
