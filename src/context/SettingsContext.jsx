@@ -10,6 +10,9 @@ const DEFAULTS = {
   newIdeasPerWeek: 2, // Spoonacular discovery recipes mixed into a week; 0 turns discovery off
   grocerySort: 'name', // 'section' | 'name' | 'manual'
   theme: null, // 'system' | 'light' | 'dark'; null = whatever this device last used
+  takeout: { custom: [], hidden: [] }, // your own takeout ideas, and built-ins you've turned off
+  pinterestBoard: '', // link to the public board recipes are imported from
+  pinterestImported: [], // pin ids already imported
 }
 
 const SettingsContext = createContext(null)

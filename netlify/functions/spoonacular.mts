@@ -1,4 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
+import { recipeFromHtml } from "../../src/lib/recipeFromPage.js";
 
 const API_BASE = "https://api.spoonacular.com";
 
@@ -14,8 +15,38 @@ const json = (body: unknown, status = 200) =>
  *   GET /api/recipes/:id            → full recipe information (with nutrition)
  *   GET /api/recipes/random         → 10 random dinners (no nutrition: ~1.1 points;
  *                                     the client caches the batch for a week)
+ *   GET /api/recipes/extract?url=…  → a recipe from a web page: the page's own
+ *                                     recipe block if it has one (free), else Spoonacular
  */
+const PAGE_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+
+/** The recipe a page publishes for search engines (schema.org JSON-LD), read for free. */
+async function readRecipePage(recipeUrl: string) {
+  try {
+    const url = new URL(recipeUrl);
+    if (!/^https?:$/.test(url.protocol)) return null;
+    const res = await fetch(url, { headers: PAGE_HEADERS, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    return recipeFromHtml(await res.text(), res.url || recipeUrl);
+  } catch {
+    return null;
+  }
+}
+
 export default async (req: Request, context: Context) => {
+  // Importing from a link reads the page itself first; Spoonacular (which
+  // costs quota) is only asked when the page has no recipe block.
+  if (context.params?.id === "extract" && req.method === "GET") {
+    const recipeUrl = new URL(req.url).searchParams.get("url");
+    if (!recipeUrl) return json({ error: "missing_url" }, 400);
+    const fromPage = await readRecipePage(recipeUrl);
+    if (fromPage) return json(fromPage);
+  }
+
   const apiKey = Netlify.env.get("SPOONACULAR_API_KEY");
   if (!apiKey) {
     return json({ error: "not_configured" }, 503);

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { takeoutDeck, takeoutMeal } from '../lib/takeout'
+import { useSettings } from '../context/SettingsContext'
 
 /**
  * Takeout suggester: one idea at a time — take it or pass.
  * Weather-matched ideas come up first (ramen on a rainy night, poke in a heat wave).
  */
 export default function TakeoutPicker({ dayName, moodKey, onAccept, onClose }) {
-  const deck = useMemo(() => takeoutDeck(moodKey), [moodKey])
+  const { settings } = useSettings()
+  const deck = useMemo(() => takeoutDeck(moodKey, settings.takeout), [moodKey, settings.takeout])
   const [index, setIndex] = useState(0)
   const acceptRef = useRef(null)
 
@@ -28,8 +30,8 @@ export default function TakeoutPicker({ dayName, moodKey, onAccept, onClose }) {
         </button>
         <p className="overline">Night off · {dayName}</p>
         <h2 className="takeout-title">{idea.title}?</h2>
-        <p className="note takeout-blurb">{idea.blurb}</p>
-        {wrapped && <p className="muted">That’s the whole menu — going around again.</p>}
+        {idea.blurb && <p className="note takeout-blurb">{idea.blurb}</p>}
+        {wrapped && <p className="muted">That's every idea. Going around again.</p>}
         <div className="takeout-actions">
           <button
             ref={acceptRef}
@@ -40,7 +42,7 @@ export default function TakeoutPicker({ dayName, moodKey, onAccept, onClose }) {
             That’s dinner
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => setIndex((i) => i + 1)}>
-            Pass — next idea
+            Next idea
           </button>
         </div>
       </div>

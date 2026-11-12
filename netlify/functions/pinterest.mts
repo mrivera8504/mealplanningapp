@@ -55,6 +55,7 @@ const decode = (s: string) =>
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .trim();
 
 const external = (link: unknown) => {
@@ -67,7 +68,7 @@ const external = (link: unknown) => {
 };
 
 const pinTitle = (p: any) =>
-  String(p.title || p.grid_title || p.rich_metadata?.title || p.description || "Untitled pin")
+  decode(String(p.title || p.grid_title || p.rich_metadata?.title || p.description || "Untitled pin"))
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 140);
@@ -86,7 +87,7 @@ async function fromWidget(user: string, board: string) {
       id: String(p.id),
       title: pinTitle(p),
       image: p.images?.["564x"]?.url || p.images?.["237x"]?.url || null,
-      link: external(p.link),
+      link: external(typeof p.link === "string" ? decode(p.link) : p.link),
       pinUrl: `https://www.pinterest.com/pin/${p.id}/`,
     })),
   };
@@ -106,7 +107,7 @@ async function fromRss(user: string, board: string) {
       const pinUrl = tag(item, "link") || tag(item, "guid");
       const description = tag(item, "description");
       return {
-        id: pinUrl.match(/\/pin\/(\d+)/)?.[1] || pinUrl,
+        id: pinUrl.match(/\/pin\/([\w-]+)/)?.[1] || pinUrl,
         title: tag(item, "title") || description.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 140) || "Untitled pin",
         image: description.match(/<img[^>]+src="([^"]+)"/)?.[1] || null,
         link: null as string | null,
@@ -145,7 +146,7 @@ export default async (req: Request, context: Context) => {
 
   if (what === "pin") {
     const id = inUrl.searchParams.get("id") || "";
-    if (!/^\d+$/.test(id)) return json({ error: "bad_pin" }, 400);
+    if (!/^[\w-]{1,80}$/.test(id)) return json({ error: "bad_pin" }, 400);
     try {
       return json({ link: await pinLink(id) });
     } catch {

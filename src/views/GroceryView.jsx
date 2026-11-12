@@ -6,7 +6,7 @@ import { usePlan } from '../hooks/usePlan'
 import { useWalmartProducts } from '../hooks/useWalmartProducts'
 import { useIngredients } from '../hooks/useIngredients'
 import { useSettings } from '../context/SettingsContext'
-import WalmartPicker, { ProductLine } from '../components/WalmartPicker'
+import WalmartPicker from '../components/WalmartPicker'
 import { buildGroceryItems, canonicalKey, normalizeName } from '../lib/grocery'
 import { walmartCartUrl } from '../lib/walmart'
 import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
@@ -355,14 +355,6 @@ export default function GroceryView() {
                         ✕
                       </button>
                     )}
-                    {walmart.loaded && !state.checked[row.key] && (
-                      <WalmartLine
-                        match={walmart.matches[row.matchKey]}
-                        onPick={() => openPicker([row])}
-                        onQty={(q) => walmart.setQty(row.matchKey, q)}
-                        onUndoSkip={() => walmart.forget(row.matchKey)}
-                      />
-                    )}
                     {sortMode === 'section' && editing?.key !== row.key && (
                       <select
                         className="grocery-section-select"
@@ -482,45 +474,6 @@ export default function GroceryView() {
           onClose={() => setPickerQueue(null)}
         />
       )}
-    </div>
-  )
-}
-
-function WalmartLine({ match, onPick, onQty, onUndoSkip }) {
-  if (match?.skip) {
-    return (
-      <div className="grocery-walmart">
-        <span className="muted">Not from Walmart</span>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onUndoSkip}>
-          Undo
-        </button>
-      </div>
-    )
-  }
-  if (match?.product) {
-    return (
-      <div className="grocery-walmart">
-        <ProductLine product={match.product} />
-        <span className="walmart-qty" aria-label="Quantity">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(match.qty - 1)} disabled={match.qty <= 1} aria-label="One fewer">
-            −
-          </button>
-          <span className="mono">{match.qty}</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(match.qty + 1)} aria-label="One more">
-            +
-          </button>
-        </span>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onPick}>
-          Change
-        </button>
-      </div>
-    )
-  }
-  return (
-    <div className="grocery-walmart">
-      <button type="button" className="btn btn-ghost btn-sm" onClick={onPick}>
-        Match at Walmart
-      </button>
     </div>
   )
 }
