@@ -1,43 +1,88 @@
 /* ————————————————————————————————————————————————
    What's for Dinner · design tokens
-   "The good notebook you keep by the stove."
+   Navy and blue, clean sans type, light and dark themes.
+
+   Components use the semantic names (--bg, --surface, --ink, --primary…).
+   The older names further down (--paper, --basil, --paprika…) are kept as
+   aliases so every rule written against them follows the theme too.
    ———————————————————————————————————————————————— */
 
 :root {
-  /* Palette */
-  --basil: #2c4a3b;
-  --basil-deep: #21382d;
-  --basil-soft: #3d5f4c;
-  --paper: #efe6d8;
-  --paper-bright: #f8f2e7;
-  --card: #faf5ea;
-  --ink: #262220;
-  --ink-soft: #57504a;
-  --ink-faint: #8a8177;
-  --paprika: #c1622d;
-  --paprika-deep: #a04e20;
-  --paprika-wash: #f3dcc9;
-  --yolk: #e8a93c;
-  --yolk-wash: #f7e6c4;
-  --slate: #6b7b8c;
-  --slate-deep: #53616f;
-  --slate-wash: #dde3e8;
-  --basil-wash: #dde5dc;
-  --rule: #d8cbb8;         /* hairline rules, like faded print */
-  --rule-strong: #b9a98f;
-  --danger: #9c3b2e;
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --chip-bg: #f1f4f8;
+  --tile: #e8f0fb;
+  --chrome: #12233b; /* the header stays navy in both themes */
+  --chrome-2: #1b3150;
+  --chrome-ink: #e8eef6;
+  --chrome-soft: #a9b8cc;
+
+  /* Text */
+  --ink: #0f1a2b;
+  --ink-soft: #475467;
+  --ink-faint: #667085;
+
+  /* Lines */
+  --rule: #dde3eb;
+  --rule-strong: #c9d2de;
+
+  /* Accent */
+  --primary: #1f5faf;
+  --primary-hover: #174a8a;
+  --primary-text: #1a4f92; /* blue text on light surfaces */
+  --primary-wash: #e8f0fb;
+  --on-primary: #ffffff;
+
+  /* Status */
+  --warn: #c98a1b;
+  --warn-text: #8a4b08;
+  --warn-wash: #fdf1dc;
+  --danger: #b42318;
+  --danger-wash: #fef0ee;
+  --sun: #d99a2b;
+  --sky: #7a8ba3;
+  --rain: #2f6fb8;
+  --snow: #5b8fcb;
+
+  --hover: rgba(16, 24, 40, 0.05);
+  --scrim: rgba(10, 17, 28, 0.5);
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.04);
+  --shadow-pop: 0 4px 10px rgba(16, 24, 40, 0.08), 0 16px 36px rgba(16, 24, 40, 0.14);
+
+  /* Older names, mapped onto the theme */
+  --paper: var(--bg);
+  --paper-bright: var(--surface);
+  --card: var(--surface);
+  --basil: var(--primary);
+  --basil-deep: var(--primary-text);
+  --basil-soft: var(--primary-text);
+  --basil-wash: var(--primary-wash);
+  --paprika: var(--primary);
+  --paprika-deep: var(--primary-text);
+  --paprika-wash: var(--primary-wash);
+  --yolk: var(--warn);
+  --yolk-wash: var(--warn-wash);
+  --slate: var(--rule-strong);
+  --slate-deep: var(--ink-soft);
+  --slate-wash: var(--chip-bg);
 
   /* Type */
-  --font-display: 'Fraunces', 'Iowan Old Style', georgia, serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', menlo, monospace;
+  --font-mono: var(--font-body); /* numbers use tabular figures instead of a typewriter face */
 
-  --text-xs: 0.72rem;
-  --text-sm: 0.84rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
   --text-md: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.7rem;
-  --text-2xl: clamp(2rem, 5vw, 2.9rem);
+  --text-lg: 1.2rem;
+  --text-xl: 1.6rem;
+  --text-2xl: clamp(1.6rem, 4vw, 2rem);
 
   /* Space */
   --sp-1: 0.25rem;
@@ -49,20 +94,60 @@
   --sp-7: 3rem;
 
   /* Shape */
-  --radius-sm: 5px;
+  --radius-sm: 6px;
   --radius-md: 9px;
   --radius-lg: 14px;
   --radius-pill: 99px;
 
-  /* Elevation — soft, paper-on-paper */
-  --shadow-card: 0 1px 2px rgba(38, 34, 32, 0.06), 0 4px 14px rgba(38, 34, 32, 0.05);
-  --shadow-pop: 0 2px 6px rgba(38, 34, 32, 0.12), 0 14px 38px rgba(38, 34, 32, 0.16);
-
   /* Motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-quick: 140ms;
-  --dur-med: 260ms;
+  --dur-med: 240ms;
 
   /* Focus */
-  --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px var(--paprika);
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+}
+
+/* Dark: deep navy, never black. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0f1825;
+  --surface: #162131;
+  --surface-2: #1b2738;
+  --chip-bg: #1f2c40;
+  --tile: #22324a;
+  --chrome: #0a111c;
+  --chrome-2: #15223a;
+  --chrome-ink: #e7edf5;
+  --chrome-soft: #a2b1c6;
+
+  --ink: #e7edf5;
+  --ink-soft: #b3c0d2;
+  --ink-faint: #8c9bb0;
+
+  --rule: #2a3a52;
+  --rule-strong: #3a4c66;
+
+  --primary: #6aa6f0;
+  --primary-hover: #8dbbf4;
+  --primary-text: #9cc4f5;
+  --primary-wash: #1e3352;
+  --on-primary: #0b1626;
+
+  --warn: #e3a64a;
+  --warn-text: #f2c27b;
+  --warn-wash: #3a2e1a;
+  --danger: #f97066;
+  --danger-wash: #3a1d1d;
+  --sun: #f0b452;
+  --sky: #9fb0c6;
+  --rain: #6aa6f0;
+  --snow: #a9c9ee;
+
+  --hover: rgba(255, 255, 255, 0.06);
+  --scrim: rgba(3, 7, 14, 0.66);
+
+  --shadow-card: none;
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45);
 }

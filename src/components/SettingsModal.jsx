@@ -8,7 +8,7 @@ import { describeRefillError } from '../lib/library'
 import { fmtShort } from '../lib/dates'
 
 export default function SettingsModal({ onClose }) {
-  const { settings, update } = useSettings()
+  const { settings, update, themeMode } = useSettings()
   const toast = useToast()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
@@ -66,7 +66,7 @@ export default function SettingsModal({ onClose }) {
         <button type="button" className="btn btn-ghost modal-close" onClick={onClose} aria-label="Close">
           ✕
         </button>
-        <h2>Kitchen settings</h2>
+        <h2>Settings</h2>
 
         <section className="settings-section">
           <h3 className="overline">Weather location</h3>
@@ -108,6 +108,28 @@ export default function SettingsModal({ onClose }) {
               ))}
             </ul>
           )}
+        </section>
+
+        <section className="settings-section">
+          <h3 className="overline">Appearance</h3>
+          <div className="seg" role="radiogroup" aria-label="Appearance">
+            {[
+              ['system', 'Match device'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={themeMode === value}
+                className={`seg-btn${themeMode === value ? ' seg-btn-on' : ''}`}
+                onClick={() => update({ theme: value })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="settings-section">

@@ -147,6 +147,13 @@ export default function RecipesView() {
 
   return (
     <div className="recipes-view">
+      <div className="page-head">
+        <div className="page-head-main">
+          <h1 className="page-title">Recipes</h1>
+          <p className="page-sub">Find new ideas, and keep the ones you make.</p>
+        </div>
+      </div>
+
       <div className="recipes-course">
         <div className="seg" role="radiogroup" aria-label="Course">
           {COURSES.map((c) => (

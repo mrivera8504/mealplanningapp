@@ -21,6 +21,7 @@ export function usePlan() {
   const { repo } = useAuth()
   const [plan, setPlan] = useState(EMPTY_PLAN)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false) // an edit is waiting to be written
   const timer = useRef(null)
   const planRef = useRef(plan)
   planRef.current = plan
@@ -82,9 +83,12 @@ export function usePlan() {
 
   const persistSoon = useCallback(() => {
     clearTimeout(timer.current)
+    setSaving(true)
     timer.current = setTimeout(() => {
       timer.current = null
-      repo.savePlan(planRef.current)
+      Promise.resolve(repo.savePlan(planRef.current))
+        .catch(() => {})
+        .finally(() => setSaving(false))
     }, 800)
   }, [repo])
 
@@ -125,7 +129,8 @@ export function usePlan() {
     clearTimeout(timer.current)
     timer.current = null
     await repo.savePlan(planRef.current)
+    setSaving(false)
   }, [repo])
 
-  return { plan, loading, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save }
+  return { plan, loading, saving, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save }
 }

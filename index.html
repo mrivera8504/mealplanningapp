@@ -3,16 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#2C4A3B" />
+    <meta name="theme-color" content="#12233B" />
     <meta name="description" content="What's for Dinner — a weekly meal planner that reads the weather, finds the right recipe, and puts dinner on your calendar." />
     <title>What's for Dinner</title>
     <link rel="icon" href="/pot.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Set the theme before the first paint, so dark mode doesn't flash light.
+      try {
+        var mode = localStorage.getItem('wfd:theme-mode') || 'system'
+        var dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

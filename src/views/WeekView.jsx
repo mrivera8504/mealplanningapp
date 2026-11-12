@@ -13,6 +13,8 @@ import { useRotation } from '../context/RotationContext'
 import { useLibrary } from '../hooks/useLibrary'
 import { addDays, fmtWeekRange, fromISODate, toISODate, weekDates } from '../lib/dates'
 import MealPicker from '../components/MealPicker'
+import Icon from '../components/Icon'
+import Menu, { MenuDivider, MenuItem, MenuLabel } from '../components/Menu'
 import { buildPool, dishesOf, plannedNights, servedDates, styleOf, suggestExtra, suggestForDay } from '../lib/suggestions'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
 import { HOUSE_DESSERTS, HOUSE_SIDES } from '../lib/houseExtras'
@@ -29,7 +31,7 @@ export default function WeekView({ onOpenSettings }) {
   const toast = useToast()
   const { settings } = useSettings()
   const [startIso, setStartIso] = useState(() => toISODate(new Date()))
-  const { plan, loading, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save } = usePlan()
+  const { plan, loading, saving, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save } = usePlan()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine } = useMyRecipes()
   const { forecast, status: weatherStatus, location, unit } = useWeather()
@@ -363,15 +365,6 @@ export default function WeekView({ onOpenSettings }) {
     else toast(`${dish.title} is from more than two months ago, and its recipe isn't in your lists any more.`)
   }
 
-  const savePlan = async () => {
-    try {
-      await save()
-      toast('Plan saved.')
-    } catch {
-      toast('Could not save the plan -- try again.', 'warn')
-    }
-  }
-
   const checkCalendar = async () => {
     try {
       const token = await getAccessToken()
@@ -423,82 +416,96 @@ export default function WeekView({ onOpenSettings }) {
 
   const hasAnyMeal = days.some((d) => plan.days[d.iso]?.dinner)
 
+  const planned = days.filter((d) => plan.days[d.iso]?.dinner).length
+  const weekStatus = [
+    weatherStatus === 'ready' && location?.name ? `Forecast for ${location.name}` : null,
+    `${planned} of 7 nights planned`,
+    saving ? 'Saving…' : 'All changes saved',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <div className="week-view">
-      <div className="week-toolbar">
-        <div className="week-nav">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => shiftWeek(-1)} aria-label="Previous week">
-            ←
-          </button>
-          <div className="week-heading">
-            <h2 className="week-range">{fmtWeekRange(startIso)}</h2>
+      <div className="page-head">
+        <div className="page-head-main">
+          <div className="week-nav">
+            <button type="button" className="btn btn-secondary btn-icon" onClick={() => shiftWeek(-1)} aria-label="Previous week">
+              <Icon name="chevronLeft" />
+            </button>
+            <h1 className="page-title week-range">{fmtWeekRange(startIso)}</h1>
+            <button type="button" className="btn btn-secondary btn-icon" onClick={() => shiftWeek(1)} aria-label="Next week">
+              <Icon name="chevronRight" />
+            </button>
             {startIso !== todayIso && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStartIso(todayIso)}>
-                Back to today
+                Today
               </button>
             )}
           </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => shiftWeek(1)} aria-label="Next week">
-            →
-          </button>
+          <p className="page-sub" aria-live="polite">
+            {weekStatus}
+            {weatherStatus !== 'ready' && weatherStatus !== 'locating' && weatherStatus !== 'loading' && (
+              <>
+                {' · '}
+                <button type="button" className="link-inline" onClick={onOpenSettings}>
+                  Set your location
+                </button>{' '}
+                for the forecast
+              </>
+            )}
+          </p>
         </div>
 
-        <p className="week-weather-note note">
-          {weatherStatus === 'ready'
-            ? `Forecast for ${location?.name || 'the demo week'}. It only shapes the menu when you ask it to.`
-            : weatherStatus === 'locating' || weatherStatus === 'loading'
-              ? 'Reading the sky…'
-              : (
-                <>
-                  No forecast yet --{' '}
-                  <button type="button" className="link-inline" onClick={onOpenSettings}>
-                    set your location
-                  </button>{' '}
-                  to see the weather for each night.
-                </>
-              )}
-        </p>
-
-        <div className="week-actions">
-          <button type="button" className="btn btn-secondary" onClick={planWholeWeek}>
-            Fill empty nights
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={planWeekForWeather} title="Fills empty nights with dinners that suit each night's forecast">
-            Fill for the weather
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={planWeekFromMine} title="Only suggests from your own recipe book">
-            Fill from my recipes
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => fillExtras('side')} disabled={!hasAnyMeal} title="Adds a side to each planned dinner that doesn't have one">
-            Fill sides
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => fillExtras('dessert')} disabled={!hasAnyMeal} title="Adds a dessert to each planned night that doesn't have one">
-            Fill desserts
-          </button>
-          <button type="button" className="btn btn-primary" onClick={savePlan} disabled={loading}>
-            Save plan
-          </button>
+        <div className="page-actions">
           {calendarConfigured && (
             <>
-              <button type="button" className="btn btn-basil" onClick={syncToCalendar} disabled={syncing || !hasAnyMeal}>
-                {syncing ? 'Syncing…' : 'Sync to Calendar'}
+              <button type="button" className="btn btn-ghost" onClick={checkCalendar}>
+                Busy nights
               </button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={checkCalendar}>
-                Check busy nights
+              <button type="button" className="btn btn-secondary" onClick={syncToCalendar} disabled={syncing || !hasAnyMeal}>
+                <Icon name="calendar" size={16} />
+                {syncing ? 'Syncing…' : 'Sync to Calendar'}
               </button>
             </>
           )}
+          <div className="split-btn">
+            <button type="button" className="btn btn-primary split-btn-main" onClick={planWholeWeek}>
+              <Icon name="sparkle" size={16} />
+              Fill empty nights
+            </button>
+            <Menu label="More ways to fill the week" icon="chevronDown" iconOnly align="end" buttonClass="btn btn-primary btn-icon split-btn-more">
+              <MenuLabel>Dinners</MenuLabel>
+              <MenuItem icon="sparkle" onSelect={planWholeWeek}>
+                Fill empty nights
+              </MenuItem>
+              <MenuItem icon="cloud" onSelect={planWeekForWeather}>
+                Fill for the weather
+              </MenuItem>
+              <MenuItem icon="book" onSelect={planWeekFromMine}>
+                Fill from my recipes
+              </MenuItem>
+              <MenuDivider />
+              <MenuLabel>Extras</MenuLabel>
+              <MenuItem icon="plus" onSelect={() => fillExtras('side')} disabled={!hasAnyMeal}>
+                Fill sides
+              </MenuItem>
+              <MenuItem icon="plus" onSelect={() => fillExtras('dessert')} disabled={!hasAnyMeal}>
+                Fill desserts
+              </MenuItem>
+            </Menu>
+          </div>
         </div>
       </div>
 
       {shortfall && (
-        <div className="week-notice" role="status">
-          <p className="note">
+        <div className="notice" role="status">
+          <p>
             Your recipe book has {mine.length} recipe{mine.length === 1 ? '' : 's'}, and everything else in it was on the
             plan in the last two weeks. {shortfall.nights} night{shortfall.nights > 1 ? 's are' : ' is'} still empty.
           </p>
-          <div className="week-notice-actions">
-            <button type="button" className="btn btn-basil btn-sm" onClick={() => fillShortfall(pool, '')}>
+          <div className="notice-actions">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => fillShortfall(pool, '')}>
               Fill from all my lists
             </button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => fillShortfall(mine, ' from your recipe book')}>
@@ -511,7 +518,14 @@ export default function WeekView({ onOpenSettings }) {
         </div>
       )}
 
-      <div className="week-grid">
+      <div className="week-list" role="list" aria-label="This week's dinners">
+        <div className="week-list-head" aria-hidden="true">
+          <span>Night</span>
+          <span>Dinner</span>
+          <span>Sides &amp; dessert</span>
+          <span>Weather</span>
+          <span />
+        </div>
         {days.map((d) => (
           <DayCard
             key={d.iso}
@@ -526,7 +540,6 @@ export default function WeekView({ onOpenSettings }) {
             onWeatherPick={() => swapFor(d.iso, pool, { weather: true })}
             onSuggestMine={() => suggestMineFor(d.iso)}
             onTakeout={() => setTakeoutFor({ iso: d.iso, name: d.name })}
-            onSwap={() => swapFor(d.iso)}
             onRemove={() => removeMealAt(d.iso)}
             onView={() => openDish(plan.days[d.iso]?.dinner)}
             sides={plan.days[d.iso]?.sides || []}
@@ -545,12 +558,10 @@ export default function WeekView({ onOpenSettings }) {
       </div>
 
       {!hasAnyMeal && !loading && (
-        <div className="week-empty">
-          <p className="note week-empty-line">A blank week is a good week -- let's fill it.</p>
-          <p className="muted">
-            Tap <strong>Suggest</strong> on any night, or fill the whole spread at once.
-          </p>
-          <div className="week-actions">
+        <div className="empty-state">
+          <p className="empty-state-title">Nothing planned this week yet</p>
+          <p className="muted">Fill every night at once, or use Suggest on any night.</p>
+          <div className="page-actions">
             <button type="button" className="btn btn-primary" onClick={planWholeWeek}>
               Fill my week
             </button>

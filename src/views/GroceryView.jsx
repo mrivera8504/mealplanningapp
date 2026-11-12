@@ -187,48 +187,29 @@ export default function GroceryView() {
 
   return (
     <div className="grocery-view">
-      <header className="grocery-head">
-        <div>
-          <h2>Grocery list</h2>
-          <p className="mono grocery-week">{fmtWeekRange(startIso)}</p>
+      <div className="page-head">
+        <div className="page-head-main">
+          <h1 className="page-title">Groceries</h1>
+          <p className="page-sub">
+            {fmtWeekRange(startIso)}
+            {allRows.length > 0 && ` · ${allRows.length} item${allRows.length === 1 ? '' : 's'}`}
+          </p>
         </div>
-        {allRows.length > 0 && (
-          <div className="grocery-head-side">
-            <p className="mono grocery-count">
-              {remaining} of {allRows.length} to get
-            </p>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={clearChecked}>
-              Uncheck all
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-              Print list
-            </button>
-            {walmart.loaded && unmatched.length > 0 && (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => openPicker(unmatched)}>
-                Match {unmatched.length} for Walmart
-              </button>
-            )}
-            {cartLines.length > 0 && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={sendToCart}>
-                Add {cartLines.length} to Walmart cart ↗
-              </button>
-            )}
-          </div>
-        )}
-      </header>
+      </div>
 
       {loading || !stateLoaded ? (
         <p className="muted">Gathering the week’s ingredients…</p>
       ) : meals.length === 0 && state.extras.length === 0 ? (
-        <div className="grocery-empty">
-          <p className="note grocery-empty-line">The list writes itself — once dinner is planned.</p>
+        <div className="empty-state">
+          <p className="empty-state-title">Nothing on the list yet</p>
           <p className="muted">
             Plan a few nights on <Link to="/">the weekly spread</Link> and every ingredient lands here, merged
             and ready for the store.
           </p>
         </div>
       ) : (
-        <>
+        <div className="grocery-layout">
+          <div className="grocery-main">
           <div className="grocery-sortbar">
             <span className="overline">Sort by</span>
             <div className="seg" role="radiogroup" aria-label="Sort the list">
@@ -424,19 +405,72 @@ export default function GroceryView() {
             </section>
           ))}
 
-          <form className="grocery-add" onSubmit={addExtra}>
-            <input
-              className="input"
-              placeholder="Add something else — coffee, olive oil, flowers…"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              aria-label="Add an item"
-            />
-            <button type="submit" className="btn btn-secondary">
-              Add item
-            </button>
-          </form>
-        </>
+          </div>
+
+          <aside className="grocery-aside" aria-label="List summary">
+            <div className="panel">
+              <div className="panel-row">
+                <span className="panel-title">Progress</span>
+                <span className="muted mono">
+                  {allRows.length - remaining} of {allRows.length}
+                </span>
+              </div>
+              <div
+                className="progress"
+                role="progressbar"
+                aria-label="Items checked off"
+                aria-valuemin={0}
+                aria-valuemax={allRows.length}
+                aria-valuenow={allRows.length - remaining}
+              >
+                <span style={{ width: `${allRows.length ? ((allRows.length - remaining) / allRows.length) * 100 : 0}%` }} />
+              </div>
+              {cartLines.length > 0 && (
+                <button type="button" className="btn btn-primary panel-wide" onClick={sendToCart}>
+                  Send {cartLines.length} to Walmart cart
+                </button>
+              )}
+              {walmart.loaded && unmatched.length > 0 && (
+                <p className="muted">
+                  {unmatched.length} item{unmatched.length > 1 ? 's' : ''} still need{unmatched.length > 1 ? '' : 's'} a Walmart match.
+                </p>
+              )}
+              <div className="panel-buttons">
+                {walmart.loaded && unmatched.length > 0 && (
+                  <button type="button" className="btn btn-secondary" onClick={() => openPicker(unmatched)}>
+                    Match items
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
+                  Print
+                </button>
+              </div>
+              {remaining < allRows.length && (
+                <button type="button" className="btn btn-ghost btn-sm panel-wide" onClick={clearChecked}>
+                  Uncheck all
+                </button>
+              )}
+            </div>
+
+            <form className="panel" onSubmit={addExtra}>
+              <label htmlFor="grocery-extra" className="panel-title">
+                Add something extra
+              </label>
+              <div className="grocery-add">
+                <input
+                  id="grocery-extra"
+                  className="input"
+                  placeholder="Coffee, paper towels…"
+                  value={newItem}
+                  onChange={(e) => setNewItem(e.target.value)}
+                />
+                <button type="submit" className="btn btn-soft">
+                  Add
+                </button>
+              </div>
+            </form>
+          </aside>
+        </div>
       )}
 
       {pickerQueue && (
