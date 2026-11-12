@@ -18,7 +18,8 @@ const CloseContext = createContext(() => {})
  * (like "Move to…") without closing.
  *
  * `align` is only a preference: when the menu would run off the screen it
- * opens toward the side that has room, and upward when there's no room below.
+ * opens toward the side that has room, upward when there's more room above,
+ * and scrolls when it's taller than the room it has.
  */
 export default function Menu({
   label,
@@ -65,9 +66,15 @@ export default function Menu({
       const left = Math.min(Math.max(margin, button.left), vw - margin - menu.width)
       shift = Math.max(margin, left) - button.left
     }
-    const below = vh - button.bottom
-    const up = menu.height + margin > below && button.top > below
-    setFit({ side, up, shift })
+    // Room above and below, not counting the sticky header or the phone's bottom bar.
+    const top = document.querySelector('.masthead')?.getBoundingClientRect().bottom || 0
+    const navBar = document.querySelector('.bottom-nav')
+    const bottom = navBar && getComputedStyle(navBar).display !== 'none' ? navBar.getBoundingClientRect().top : vh
+    const below = bottom - button.bottom - margin - 6
+    const above = button.top - top - margin - 6
+    const up = menu.height > below && above > below
+    const room = Math.max(up ? above : below, 160)
+    setFit({ side, up, shift, maxHeight: menu.height > room ? room : null })
   }, [open, fit, align])
 
   useEffect(() => {
@@ -131,7 +138,11 @@ export default function Menu({
           role="menu"
           aria-label={menuLabel || label}
           className={`menu-list menu-list-${fit?.side === 'end' ? 'end' : 'start'}${fit?.up ? ' menu-list-up' : ''}`}
-          style={fit ? (fit.side === 'pinned' ? { left: fit.shift } : undefined) : { visibility: 'hidden' }}
+          style={
+            fit
+              ? { ...(fit.side === 'pinned' ? { left: fit.shift } : {}), ...(fit.maxHeight ? { maxHeight: fit.maxHeight } : {}) }
+              : { visibility: 'hidden' }
+          }
           onKeyDown={onListKey}
         >
           <CloseContext.Provider value={close}>{content}</CloseContext.Provider>
