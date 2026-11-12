@@ -371,7 +371,7 @@
 .menu-list,
 .move-menu {
   position: absolute;
-  z-index: 40;
+  z-index: 70;
   top: calc(100% + 6px);
   min-width: 15rem;
   max-width: calc(100vw - 16px);
@@ -386,18 +386,8 @@
   flex-direction: column;
 }
 
-.menu-list-start,
 .move-menu {
   left: 0;
-}
-
-.menu-list-end {
-  right: 0;
-}
-
-.menu-list-up {
-  top: auto;
-  bottom: calc(100% + 6px);
 }
 
 .menu-item,

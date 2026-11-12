@@ -17,9 +17,9 @@ const CloseContext = createContext(() => {})
  * Children can be a function of `close`, for menus that switch views
  * (like "Move to…") without closing.
  *
- * `align` is only a preference: when the menu would run off the screen it
- * opens toward the side that has room, upward when there's more room above,
- * and scrolls when it's taller than the room it has.
+ * `align` is only a preference: the menu opens toward whichever side has
+ * room, upward when there's more room above, and scrolls when it's taller
+ * than the room it has.
  */
 export default function Menu({
   label,
@@ -34,7 +34,7 @@ export default function Menu({
   buttonContent, // custom button inside (an avatar, say); `label` is then its accessible name
 }) {
   const [open, setOpen] = useState(false)
-  const [fit, setFit] = useState(null) // { side: 'start'|'end'|'pinned', up, shift }
+  const [fit, setFit] = useState(null) // the open menu's fixed position: { left, top or bottom, maxHeight }
   const wrap = useRef(null)
   const list = useRef(null)
   const id = useId()
@@ -45,37 +45,50 @@ export default function Menu({
     onOpenChange?.(v)
   }
 
-  // Keep the open menu on screen. Measure it where `align` puts it; if it
-  // overflows, try the other side; if neither fits (a narrow phone), pin it
-  // inside the screen edges. Then flip it upward if it would run off the bottom.
+  // Keep the open menu on screen. It is positioned against the viewport
+  // (position: fixed) from the button's current place: under the button on
+  // its `align` side if that fits, the other side if not, pinned inside the
+  // screen edges if neither does; upward when there's more room above; and
+  // never taller than the room it has, counting the sticky header and the
+  // phone's bottom bar. It follows the button while the page scrolls.
   useLayoutEffect(() => {
-    if (!open || fit || !list.current) return
-    const margin = 8
-    const vw = document.documentElement.clientWidth
-    const vh = window.innerHeight
-    const button = wrap.current.getBoundingClientRect()
-    const menu = list.current.getBoundingClientRect()
-    const fullHeight = list.current.scrollHeight
-    const fitsStart = button.left + menu.width <= vw - margin
-    const fitsEnd = button.right - menu.width >= margin
-    let side = align
-    let shift = 0
-    if (side === 'start' && !fitsStart) side = fitsEnd ? 'end' : 'pinned'
-    else if (side === 'end' && !fitsEnd) side = fitsStart ? 'start' : 'pinned'
-    if (side === 'pinned') {
-      // Left edge relative to the button, clamped so the whole menu is on screen.
-      const left = Math.min(Math.max(margin, button.left), vw - margin - menu.width)
-      shift = Math.max(margin, left) - button.left
+    if (!open) return undefined
+    const place = () => {
+      if (!list.current || !wrap.current) return
+      const margin = 8
+      const gap = 6
+      const vw = document.documentElement.clientWidth
+      const button = wrap.current.getBoundingClientRect()
+      const width = list.current.offsetWidth
+      const fullHeight = list.current.scrollHeight
+
+      let left = align === 'end' ? button.right - width : button.left
+      if (left + width > vw - margin) left = button.right - width
+      if (left < margin) left = button.left
+      left = Math.min(Math.max(margin, left), vw - margin - width)
+
+      const top = document.querySelector('.masthead')?.getBoundingClientRect().bottom || 0
+      const navBar = document.querySelector('.bottom-nav')
+      const bottom = navBar && getComputedStyle(navBar).display !== 'none' ? navBar.getBoundingClientRect().top : window.innerHeight
+      const below = bottom - button.bottom - gap - margin
+      const above = button.top - top - gap - margin
+      const up = fullHeight > below && above > below
+      const maxHeight = Math.max(Math.min(up ? above : below, 420), 120)
+      setFit(
+        up
+          ? { left, bottom: window.innerHeight - button.top + gap, maxHeight }
+          : { left, top: button.bottom + gap, maxHeight }
+      )
     }
-    // Room above and below, not counting the sticky header or the phone's bottom bar.
-    const top = document.querySelector('.masthead')?.getBoundingClientRect().bottom || 0
-    const navBar = document.querySelector('.bottom-nav')
-    const bottom = navBar && getComputedStyle(navBar).display !== 'none' ? navBar.getBoundingClientRect().top : vh
-    const below = bottom - button.bottom - margin - 6
-    const above = button.top - top - margin - 6
-    const up = fullHeight > below && above > below
-    setFit({ side, up, shift, maxHeight: Math.max(up ? above : below, 160) })
-  }, [open, fit, align])
+    place()
+    const onMove = () => requestAnimationFrame(place)
+    window.addEventListener('scroll', onMove, { passive: true, capture: true })
+    window.addEventListener('resize', onMove)
+    return () => {
+      window.removeEventListener('scroll', onMove, { capture: true })
+      window.removeEventListener('resize', onMove)
+    }
+  }, [open, align])
 
   useEffect(() => {
     if (!open) return undefined
@@ -137,12 +150,8 @@ export default function Menu({
           ref={list}
           role="menu"
           aria-label={menuLabel || label}
-          className={`menu-list menu-list-${fit?.side === 'end' ? 'end' : 'start'}${fit?.up ? ' menu-list-up' : ''}`}
-          style={
-            fit
-              ? { ...(fit.side === 'pinned' ? { left: fit.shift } : {}), maxHeight: `min(${fit.maxHeight}px, 420px)` }
-              : { visibility: 'hidden' }
-          }
+          className="menu-list"
+          style={fit ? { position: 'fixed', ...fit } : { position: 'fixed', top: 0, left: 0, visibility: 'hidden' }}
           onKeyDown={onListKey}
         >
           <CloseContext.Provider value={close}>{content}</CloseContext.Provider>
