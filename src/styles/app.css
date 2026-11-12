@@ -371,9 +371,10 @@
 .menu-list,
 .move-menu {
   position: absolute;
-  z-index: 40;
+  z-index: 70;
   top: calc(100% + 6px);
   min-width: 15rem;
+  max-width: calc(100vw - 16px);
   max-height: min(420px, 70vh);
   overflow-y: auto;
   background: var(--surface);
@@ -385,13 +386,8 @@
   flex-direction: column;
 }
 
-.menu-list-start,
 .move-menu {
   left: 0;
-}
-
-.menu-list-end {
-  right: 0;
 }
 
 .menu-item,

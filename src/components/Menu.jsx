@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 
 const CloseContext = createContext(() => {})
@@ -16,6 +16,10 @@ const CloseContext = createContext(() => {})
  * `label` is the button's text, or its accessible name when `iconOnly`.
  * Children can be a function of `close`, for menus that switch views
  * (like "Move to…") without closing.
+ *
+ * `align` is only a preference: the menu opens toward whichever side has
+ * room, upward when there's more room above, and scrolls when it's taller
+ * than the room it has.
  */
 export default function Menu({
   label,
@@ -30,14 +34,61 @@ export default function Menu({
   buttonContent, // custom button inside (an avatar, say); `label` is then its accessible name
 }) {
   const [open, setOpen] = useState(false)
+  const [fit, setFit] = useState(null) // the open menu's fixed position: { left, top or bottom, maxHeight }
   const wrap = useRef(null)
   const list = useRef(null)
   const id = useId()
 
   const setOpenState = (v) => {
     setOpen(v)
+    if (!v) setFit(null)
     onOpenChange?.(v)
   }
+
+  // Keep the open menu on screen. It is positioned against the viewport
+  // (position: fixed) from the button's current place: under the button on
+  // its `align` side if that fits, the other side if not, pinned inside the
+  // screen edges if neither does; upward when there's more room above; and
+  // never taller than the room it has, counting the sticky header and the
+  // phone's bottom bar. It follows the button while the page scrolls.
+  useLayoutEffect(() => {
+    if (!open) return undefined
+    const place = () => {
+      if (!list.current || !wrap.current) return
+      const margin = 8
+      const gap = 6
+      const vw = document.documentElement.clientWidth
+      const button = wrap.current.getBoundingClientRect()
+      const width = list.current.offsetWidth
+      const fullHeight = list.current.scrollHeight
+
+      let left = align === 'end' ? button.right - width : button.left
+      if (left + width > vw - margin) left = button.right - width
+      if (left < margin) left = button.left
+      left = Math.min(Math.max(margin, left), vw - margin - width)
+
+      const top = document.querySelector('.masthead')?.getBoundingClientRect().bottom || 0
+      const navBar = document.querySelector('.bottom-nav')
+      const bottom = navBar && getComputedStyle(navBar).display !== 'none' ? navBar.getBoundingClientRect().top : window.innerHeight
+      const below = bottom - button.bottom - gap - margin
+      const above = button.top - top - gap - margin
+      const up = fullHeight > below && above > below
+      const maxHeight = Math.max(Math.min(up ? above : below, 420), 120)
+      setFit(
+        up
+          ? { left, top: 'auto', bottom: window.innerHeight - button.top + gap, maxHeight }
+          : { left, top: button.bottom + gap, bottom: 'auto', maxHeight }
+      )
+    }
+    place()
+    const onMove = () => requestAnimationFrame(place)
+    window.addEventListener('scroll', onMove, { passive: true, capture: true })
+    window.addEventListener('resize', onMove)
+    return () => {
+      window.removeEventListener('scroll', onMove, { capture: true })
+      window.removeEventListener('resize', onMove)
+    }
+  }, [open, align])
 
   useEffect(() => {
     if (!open) return undefined
@@ -53,7 +104,7 @@ export default function Menu({
     document.addEventListener('pointerdown', onDown)
     window.addEventListener('keydown', onKey)
     // Focus the first item, so the keyboard can carry on from the button.
-    requestAnimationFrame(() => list.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus())
+    requestAnimationFrame(() => list.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true }))
     return () => {
       document.removeEventListener('pointerdown', onDown)
       window.removeEventListener('keydown', onKey)
@@ -99,7 +150,8 @@ export default function Menu({
           ref={list}
           role="menu"
           aria-label={menuLabel || label}
-          className={`menu-list menu-list-${align}`}
+          className="menu-list"
+          style={fit ? { position: 'fixed', ...fit } : { position: 'fixed', top: 0, left: 0, visibility: 'hidden' }}
           onKeyDown={onListKey}
         >
           <CloseContext.Provider value={close}>{content}</CloseContext.Provider>
