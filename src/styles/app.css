@@ -1570,6 +1570,23 @@
   color: var(--basil);
 }
 
+.grocery-buy {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.grocery-buy .btn {
+  min-width: 28px;
+  padding-inline: 0;
+}
+
+.grocery-buy .mono {
+  min-width: 1.4em;
+  text-align: center;
+}
+
 .walmart-qty {
   display: inline-flex;
   align-items: center;
@@ -2221,6 +2238,7 @@
   .grocery-aside,
   .grocery-add,
   .grocery-walmart,
+  .grocery-buy,
   .grocery-edit,
   .grocery-sortbar,
   .grocery-section-move,
@@ -2552,4 +2570,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
+}
+
+/* Phones: a row with a buy count drops the recipe name so the item stays on one line */
+@media (max-width: 600px) {
+  .grocery-row:has(.grocery-buy) .grocery-sources {
+    display: none;
+  }
 }
