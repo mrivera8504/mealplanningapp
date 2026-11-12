@@ -55,6 +55,7 @@ export default function Menu({
     const vh = window.innerHeight
     const button = wrap.current.getBoundingClientRect()
     const menu = list.current.getBoundingClientRect()
+    const fullHeight = list.current.scrollHeight
     const fitsStart = button.left + menu.width <= vw - margin
     const fitsEnd = button.right - menu.width >= margin
     let side = align
@@ -72,9 +73,8 @@ export default function Menu({
     const bottom = navBar && getComputedStyle(navBar).display !== 'none' ? navBar.getBoundingClientRect().top : vh
     const below = bottom - button.bottom - margin - 6
     const above = button.top - top - margin - 6
-    const up = menu.height > below && above > below
-    const room = Math.max(up ? above : below, 160)
-    setFit({ side, up, shift, maxHeight: menu.height > room ? room : null })
+    const up = fullHeight > below && above > below
+    setFit({ side, up, shift, maxHeight: Math.max(up ? above : below, 160) })
   }, [open, fit, align])
 
   useEffect(() => {
@@ -91,7 +91,7 @@ export default function Menu({
     document.addEventListener('pointerdown', onDown)
     window.addEventListener('keydown', onKey)
     // Focus the first item, so the keyboard can carry on from the button.
-    requestAnimationFrame(() => list.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus())
+    requestAnimationFrame(() => list.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true }))
     return () => {
       document.removeEventListener('pointerdown', onDown)
       window.removeEventListener('keydown', onKey)
@@ -140,7 +140,7 @@ export default function Menu({
           className={`menu-list menu-list-${fit?.side === 'end' ? 'end' : 'start'}${fit?.up ? ' menu-list-up' : ''}`}
           style={
             fit
-              ? { ...(fit.side === 'pinned' ? { left: fit.shift } : {}), ...(fit.maxHeight ? { maxHeight: fit.maxHeight } : {}) }
+              ? { ...(fit.side === 'pinned' ? { left: fit.shift } : {}), maxHeight: `min(${fit.maxHeight}px, 420px)` }
               : { visibility: 'hidden' }
           }
           onKeyDown={onListKey}
