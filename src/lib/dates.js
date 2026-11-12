@@ -51,6 +51,6 @@ export function fmtWeekRange(startIso) {
   const end = addDays(start, 6)
   const sameMonth = start.getMonth() === end.getMonth()
   return sameMonth
-    ? `${MONTHS[start.getMonth()]} ${start.getDate()}--${end.getDate()}, ${end.getFullYear()}`
-    : `${fmtShort(start)} -- ${fmtShort(end)}, ${end.getFullYear()}`
+    ? `${MONTHS[start.getMonth()]} ${start.getDate()} – ${end.getDate()}`
+    : `${fmtShort(start)} – ${fmtShort(end)}`
 }

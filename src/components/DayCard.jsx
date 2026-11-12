@@ -212,12 +212,12 @@ export default function DayCard({
               )}
               {showSavePrompt && (
                 <span className="save-prompt">
-                  {pendingSave.isDiscovery ? 'New idea, not in your recipes.' : 'Not in your recipes.'}
+                  {pendingSave.isDiscovery ? 'New idea' : 'Not in your recipes'}
                   <button type="button" className="link-inline" onClick={onSaveRecipe}>
                     Save it
                   </button>
                   <button type="button" className="link-inline link-muted" onClick={onDismissSave} title="Never suggest this recipe again">
-                    Don't suggest again
+                    Don't suggest
                   </button>
                 </span>
               )}
