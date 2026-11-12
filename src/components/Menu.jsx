@@ -76,8 +76,8 @@ export default function Menu({
       const maxHeight = Math.max(Math.min(up ? above : below, 420), 120)
       setFit(
         up
-          ? { left, bottom: window.innerHeight - button.top + gap, maxHeight }
-          : { left, top: button.bottom + gap, maxHeight }
+          ? { left, top: 'auto', bottom: window.innerHeight - button.top + gap, maxHeight }
+          : { left, top: button.bottom + gap, bottom: 'auto', maxHeight }
       )
     }
     place()
