@@ -1,128 +1,78 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import WeatherBadge from './WeatherBadge'
 import CategoryGlyph from './CategoryGlyph'
+import Icon from './Icon'
+import Menu, { MenuDivider, MenuItem, MenuLabel } from './Menu'
 import { moodForDay } from '../lib/weather'
-import { fmtShort, isToday } from '../lib/dates'
+import { fromISODate, isToday } from '../lib/dates'
 import { MAX_SIDES } from '../lib/courses'
 
+const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+/** The picture for a dish: its photo when it has one, otherwise its category icon on a tile. */
+function DishTile({ dish, size = 48 }) {
+  return (
+    <span className={`dish-tile${dish?.takeout ? ' dish-tile-takeout' : ''}`} style={{ width: size, height: size }} aria-hidden="true">
+      {dish?.image ? <img src={dish.image} alt="" loading="lazy" /> : <CategoryGlyph category={dish?.categories?.[0] || 'stew'} size={Math.round(size * 0.46)} />}
+    </span>
+  )
+}
+
+/** A side or dessert under the dinner: a chip that opens its own small menu. */
+function ExtraChip({ dish, kind, onView, onSwap, onRemove }) {
+  return (
+    <Menu
+      label={`${kind}: ${dish.title}`}
+      menuLabel={dish.title}
+      buttonClass="extra-chip"
+      buttonContent={
+        <>
+          <span className="extra-chip-kind">{kind}</span>
+          <span className="extra-chip-name">{dish.title}</span>
+        </>
+      }
+    >
+      {!dish.quick && (
+        <MenuItem icon="eye" onSelect={() => onView(dish)}>
+          View recipe
+        </MenuItem>
+      )}
+      <MenuItem icon="refresh" onSelect={() => onSwap(dish)}>
+        Another {kind.toLowerCase()}
+      </MenuItem>
+      <MenuItem icon="trash" danger onSelect={() => onRemove(dish)}>
+        Remove
+      </MenuItem>
+    </Menu>
+  )
+}
+
 /**
- * One day of the weekly spread -- a section of the printed menu card.
- * Supports drag & drop between days plus a tap-based "Move to…" fallback.
- * The Swap/Suggest menus offer: any idea, a pick for that night's weather,
- * personal recipes, browsing, or a takeout suggestion. Weather is always
- * shown but only shapes a pick when "For this weather" is chosen.
- * Under the dinner sit its sides (up to three) and a dessert: each can be
- * suggested, picked or typed, swapped for another idea, or removed. They
- * travel with the dinner when the night is moved.
+ * One night of the week, as a row: the date, the dinner, its sides and
+ * dessert, the weather, and one menu with everything you can do to the
+ * night. On a phone the row becomes a card.
+ *
+ * The dinner can be dragged onto another night; "Move to another night"
+ * in the menu does the same without dragging. Weather always shows, but
+ * only shapes a pick from "Pick for the weather".
  */
-
-/** Small dropdown that closes on outside click / Escape. */
-function Menu({ label, className, children, disabled }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return undefined
-    const onDown = (e) => {
-      if (!ref.current?.contains(e.target)) setOpen(false)
-    }
-    const onKey = (e) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('pointerdown', onDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  return (
-    <div className="move-wrap" ref={ref}>
-      <button
-        type="button"
-        className={className || 'btn btn-ghost btn-sm'}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="move-menu" role="menu" onClick={() => setOpen(false)}>
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** One line of extras under the dinner: the night's sides, or its dessert. */
-function ExtraRow({ label, one, items, canAdd, onSuggest, onPick, onSwap, onRemove, onView }) {
-  return (
-    <div className="extra-row">
-      <span className="overline extra-label">{label}</span>
-      <ul className="extra-list">
-        {items.map((item) => (
-          <li key={item.id} className="extra-item">
-            {item.quick ? (
-              <span className="extra-title">{item.title}</span>
-            ) : (
-              <button type="button" className="link-quiet extra-title" onClick={() => onView(item)}>
-                {item.title}
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm extra-btn"
-              onClick={() => onSwap(item)}
-              aria-label={`Another ${one} instead of ${item.title}`}
-              title={`Another ${one}`}
-            >
-              ↻
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger-ghost btn-sm extra-btn"
-              onClick={() => onRemove(item)}
-              aria-label={`Remove ${item.title}`}
-            >
-              ✕
-            </button>
-          </li>
-        ))}
-      </ul>
-      {canAdd && (
-        <Menu label={`+ ${one} ▾`} className="btn btn-ghost btn-sm extra-add">
-          <button type="button" role="menuitem" onClick={onSuggest}>
-            Suggest a {one}
-          </button>
-          <button type="button" role="menuitem" onClick={onPick}>
-            Pick or type one
-          </button>
-        </Menu>
-      )}
-    </div>
-  )
-}
-
 export default function DayCard({
   day, // { name, iso }
   weatherDay,
   meal,
   busyEvents,
-  otherDays, // [{name, iso}] -- targets for the Move menu
-  hasMine, // whether any personal recipes exist
+  otherDays, // [{name, iso}] -- targets for moving
+  hasMine,
   unit,
   onSuggest,
   onWeatherPick,
   onSuggestMine,
   onTakeout,
-  onSwap,
   onRemove,
   onView,
   onPickRecipe,
   onMoveMeal, // (fromIso, toIso)
-  pendingSave, // recipe awaiting a save/dismiss decision, if it came from the house collection
+  pendingSave,
   onSaveRecipe,
   onDismissSave,
   sides = [],
@@ -133,9 +83,14 @@ export default function DayCard({
   onViewDish, // (dish)
 }) {
   const [dragOver, setDragOver] = useState(false)
+  const [moving, setMoving] = useState(false)
   const mood = moodForDay(weatherDay)
   const today = isToday(day.iso)
+  const date = fromISODate(day.iso)
   const showSavePrompt = pendingSave && meal?.id === pendingSave.id
+  const canAddSide = meal && !meal.takeout && sides.length < MAX_SIDES
+  const canAddDessert = !dessert && (meal || sides.length > 0)
+  const hasNight = meal || sides.length > 0 || dessert
 
   const handleDrop = (e) => {
     e.preventDefault()
@@ -144,30 +99,72 @@ export default function DayCard({
     if (fromIso && fromIso !== day.iso) onMoveMeal(fromIso, day.iso)
   }
 
-  const sourceItems = (
-    <>
-      <button type="button" role="menuitem" onClick={meal ? onSwap : onSuggest}>
-        {meal ? 'Another idea' : 'Suggest a meal'}
-      </button>
-      <button type="button" role="menuitem" onClick={onWeatherPick} disabled={!mood} title={mood ? undefined : 'No forecast for this night yet'}>
-        For this weather
-      </button>
-      <button type="button" role="menuitem" onClick={onSuggestMine} disabled={!hasMine} title={hasMine ? undefined : 'Add recipes under Recipes → My recipes'}>
-        Surprise me (my recipes)
-      </button>
-      <button type="button" role="menuitem" onClick={onPickRecipe}>
-        Browse and pick
-      </button>
-      <button type="button" role="menuitem" onClick={onTakeout}>
-        Takeout…
-      </button>
-    </>
+  const nightMenu = (
+    <Menu label={`Options for ${day.name}`} icon="more" iconOnly align="end" buttonClass="btn btn-ghost btn-icon" onOpenChange={(open) => !open && setMoving(false)}>
+      {moving ? (
+        <>
+          <MenuItem icon="chevronLeft" keepOpen onSelect={() => setMoving(false)}>
+            Back
+          </MenuItem>
+          <MenuDivider />
+          <MenuLabel>Swap with</MenuLabel>
+          {(otherDays || []).map((d) => (
+            <MenuItem key={d.iso} onSelect={() => onMoveMeal(day.iso, d.iso)}>
+              {d.name}
+            </MenuItem>
+          ))}
+        </>
+      ) : (
+        <>
+          <MenuLabel>Dinner</MenuLabel>
+          <MenuItem icon="refresh" onSelect={onSuggest}>
+            {meal ? 'Another idea' : 'Suggest a dinner'}
+          </MenuItem>
+          <MenuItem icon="cloud" onSelect={onWeatherPick} disabled={!mood}>
+            Pick for the weather
+          </MenuItem>
+          <MenuItem icon="book" onSelect={onSuggestMine} disabled={!hasMine}>
+            From my recipes
+          </MenuItem>
+          <MenuItem icon="search" onSelect={onPickRecipe}>
+            Choose a recipe…
+          </MenuItem>
+          <MenuItem icon="bag" onSelect={onTakeout}>
+            Takeout night…
+          </MenuItem>
+          {(canAddSide || canAddDessert) && <MenuDivider />}
+          {canAddSide && (
+            <MenuItem icon="plus" onSelect={() => onSuggestExtra('side')}>
+              Suggest a side
+            </MenuItem>
+          )}
+          {canAddDessert && (
+            <MenuItem icon="plus" onSelect={() => onSuggestExtra('dessert')}>
+              Suggest a dessert
+            </MenuItem>
+          )}
+          {hasNight && (
+            <>
+              <MenuDivider />
+              <MenuItem icon="move" keepOpen trailing={<Icon name="chevronRight" size={14} />} onSelect={() => setMoving(true)}>
+                Move to another night
+              </MenuItem>
+              {meal && (
+                <MenuItem icon="trash" danger onSelect={onRemove}>
+                  Clear dinner
+                </MenuItem>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Menu>
   )
 
   return (
     <section
-      className={`day-card${today ? ' day-card-today' : ''}${dragOver ? ' day-card-dragover' : ''}`}
-      aria-label={`${day.name} ${fmtShort(day.iso)}`}
+      className={`day-row${today ? ' day-row-today' : ''}${dragOver ? ' day-row-dragover' : ''}`}
+      aria-label={`${day.name}, ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
@@ -175,126 +172,129 @@ export default function DayCard({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
-      <header className="day-card-head">
-        <div>
-          <h3 className="day-card-name">{today ? 'Tonight' : day.name}</h3>
-          <p className="day-card-date mono">{fmtShort(day.iso)}</p>
-        </div>
-        <WeatherBadge day={weatherDay} mood={mood} unit={unit} />
-      </header>
+      <div className="day-row-date">
+        <span className="day-row-dow">{SHORT_DAYS[date.getDay()]}</span>
+        <span className="day-row-num">{date.getDate()}</span>
+        {today && <span className="pill pill-primary">Tonight</span>}
+      </div>
 
-      {mood && (
-        <p className="day-card-mood note">
-          {meal?.pickedFor === 'weather' && meal.weatherNote ? `Picked for ${meal.weatherNote}` : mood.sky.label}
-        </p>
-      )}
-
-      {busyEvents?.length > 0 && (
-        <p className="day-card-busy" title={busyEvents.join(' · ')}>
-          <span aria-hidden="true">◆</span> Booked: {busyEvents[0]}
-          {busyEvents.length > 1 ? ` +${busyEvents.length - 1}` : ''}
-        </p>
-      )}
-
-      {meal ? (
-        <div
-          className="meal-slot"
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData('text/wfd-day', day.iso)
-            e.dataTransfer.effectAllowed = 'move'
-          }}
-        >
-          <span className={`meal-slot-glyph${meal.takeout ? ' meal-slot-glyph-takeout' : ''}`} aria-hidden="true">
-            <CategoryGlyph category={meal.categories?.[0] || 'stew'} size={26} />
-          </span>
-          {meal.takeout ? (
-            <span className="meal-slot-title">{meal.title}</span>
-          ) : (
-            <button type="button" className="link-quiet meal-slot-title" onClick={onView}>
-              {meal.title}
-            </button>
-          )}
-          {meal.takeout ? (
-            <span className="mono meal-slot-time">night off</span>
-          ) : (
-            meal.readyInMinutes && <span className="mono meal-slot-time">{meal.readyInMinutes} min</span>
-          )}
-          <div className="meal-slot-actions">
-            <Menu label="↻ Swap ▾">{sourceItems}</Menu>
-            <Menu label="Move ▾">
-              {(otherDays || []).map((d) => (
-                <button
-                  key={d.iso}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => onMoveMeal(day.iso, d.iso)}
-                >
-                  to {d.name}
+      <div className="day-row-dinner">
+        {meal ? (
+          <div
+            className="dinner"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/wfd-day', day.iso)
+              e.dataTransfer.effectAllowed = 'move'
+            }}
+          >
+            <DishTile dish={meal} />
+            <div className="dinner-text">
+              {meal.takeout ? (
+                <span className="dinner-title">{meal.title}</span>
+              ) : (
+                <button type="button" className="link-quiet dinner-title" onClick={onView}>
+                  {meal.title}
                 </button>
-              ))}
-            </Menu>
-            <button type="button" className="btn btn-danger-ghost btn-sm" onClick={onRemove} aria-label={`Remove ${meal.title} from ${day.name}`}>
-              ✕
-            </button>
+              )}
+              <span className="dinner-meta">
+                {meal.takeout
+                  ? 'Night off'
+                  : [meal.readyInMinutes && `${meal.readyInMinutes} min`, meal.cuisine].filter(Boolean).join(' · ') || 'Dinner'}
+                {meal.pickedFor === 'weather' && meal.weatherNote && <> · picked for {meal.weatherNote}</>}
+              </span>
+              {busyEvents?.length > 0 && (
+                <span className="pill pill-warn" title={busyEvents.join(' · ')}>
+                  <Icon name="clock" size={12} strokeWidth={2.2} />
+                  {busyEvents[0]}
+                  {busyEvents.length > 1 ? ` +${busyEvents.length - 1}` : ''}
+                </span>
+              )}
+              {showSavePrompt && (
+                <span className="save-prompt">
+                  {pendingSave.isDiscovery ? 'New idea' : 'Not in your recipes'}
+                  <button type="button" className="link-inline" onClick={onSaveRecipe}>
+                    Save it
+                  </button>
+                  <button type="button" className="link-inline link-muted" onClick={onDismissSave} title="Never suggest this recipe again">
+                    Don't suggest
+                  </button>
+                </span>
+              )}
+            </div>
           </div>
-          {showSavePrompt && (
-            <div className="day-card-save-prompt">
-              <p className="note">
-                {pendingSave.isDiscovery ? 'A new idea for you -- not in your saved recipes.' : 'Not in your saved recipes.'}
-              </p>
-              <div className="day-card-save-actions">
-                <button type="button" className="btn btn-basil btn-sm" onClick={onSaveRecipe}>
-                  Save to my recipes
+        ) : (
+          <div className="dinner dinner-empty">
+            <span className="dish-tile dish-tile-empty" aria-hidden="true" />
+            <div className="dinner-text">
+              <span className="dinner-meta">Nothing planned yet</span>
+              <div className="dinner-empty-actions">
+                <button type="button" className="btn btn-soft btn-sm" onClick={onSuggest}>
+                  Suggest
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={onDismissSave} title="Never suggest this recipe again">
-                  Don't suggest again
+                <button type="button" className="btn btn-secondary btn-sm" onClick={onPickRecipe}>
+                  Choose a recipe
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="meal-slot meal-slot-empty">
-          <p className="meal-slot-invite note">
-            Nothing planned yet.
-          </p>
-          <div className="meal-slot-actions">
-            <Menu label="Suggest ▾" className="btn btn-sm btn-primary">{sourceItems}</Menu>
-            <button type="button" className="btn btn-sm btn-secondary" onClick={onPickRecipe}>
-              Pick a recipe
-            </button>
           </div>
-        </div>
-      )}
-      {(meal || sides.length > 0 || dessert) && (
-        <div className="day-extras">
-          {!meal?.takeout && (
-            <ExtraRow
-              label="Sides"
-              one="side"
-              items={sides}
-              canAdd={sides.length < MAX_SIDES}
-              onSuggest={() => onSuggestExtra('side')}
-              onPick={() => onPickExtra('side')}
-              onSwap={(item) => onSuggestExtra('side', item)}
-              onRemove={(item) => onRemoveExtra('side', item)}
-              onView={onViewDish}
-            />
-          )}
-          <ExtraRow
-            label="Dessert"
-            one="dessert"
-            items={dessert ? [dessert] : []}
-            canAdd={!dessert}
-            onSuggest={() => onSuggestExtra('dessert')}
-            onPick={() => onPickExtra('dessert')}
-            onSwap={(item) => onSuggestExtra('dessert', item)}
-            onRemove={(item) => onRemoveExtra('dessert', item)}
+        )}
+      </div>
+
+      <div className="day-row-extras">
+        {sides.map((s) => (
+          <ExtraChip
+            key={s.id}
+            dish={s}
+            kind="Side"
             onView={onViewDish}
+            onSwap={(d) => onSuggestExtra('side', d)}
+            onRemove={(d) => onRemoveExtra('side', d)}
           />
-        </div>
-      )}
+        ))}
+        {dessert && (
+          <ExtraChip
+            dish={dessert}
+            kind="Dessert"
+            onView={onViewDish}
+            onSwap={(d) => onSuggestExtra('dessert', d)}
+            onRemove={(d) => onRemoveExtra('dessert', d)}
+          />
+        )}
+        {(canAddSide || canAddDessert) && (
+          <Menu label="+ Add" buttonClass="extra-add" menuLabel={`Add to ${day.name}`} buttonContent="+ Add">
+            {canAddSide && (
+              <>
+                <MenuLabel>Side</MenuLabel>
+                <MenuItem icon="sparkle" onSelect={() => onSuggestExtra('side')}>
+                  Suggest a side
+                </MenuItem>
+                <MenuItem icon="search" onSelect={() => onPickExtra('side')}>
+                  Choose or type one…
+                </MenuItem>
+              </>
+            )}
+            {canAddSide && canAddDessert && <MenuDivider />}
+            {canAddDessert && (
+              <>
+                <MenuLabel>Dessert</MenuLabel>
+                <MenuItem icon="sparkle" onSelect={() => onSuggestExtra('dessert')}>
+                  Suggest a dessert
+                </MenuItem>
+                <MenuItem icon="search" onSelect={() => onPickExtra('dessert')}>
+                  Choose or type one…
+                </MenuItem>
+              </>
+            )}
+          </Menu>
+        )}
+      </div>
+
+      <div className="day-row-weather">
+        <WeatherBadge day={weatherDay} mood={mood} unit={unit} />
+      </div>
+
+      <div className="day-row-menu">{nightMenu}</div>
     </section>
   )
 }

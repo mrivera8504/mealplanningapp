@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
-import Masthead from './components/Masthead'
+import Masthead, { BottomNav } from './components/Masthead'
 import AuthModal from './components/AuthModal'
 import SettingsModal from './components/SettingsModal'
 import WeekView from './views/WeekView'
@@ -17,7 +17,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="boot">
-        <p className="note">Setting the table…</p>
+        <p className="muted">Loading…</p>
       </div>
     )
   }
@@ -34,8 +34,9 @@ export default function App() {
         </Routes>
       </main>
       <footer className="app-footer">
-        <p className="mono">forecast by open-meteo · recipes by spoonacular &amp; the house</p>
+        <p>Forecast by Open-Meteo · Recipes by Spoonacular and the house collection</p>
       </footer>
+      <BottomNav />
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>

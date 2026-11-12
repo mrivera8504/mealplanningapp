@@ -164,15 +164,15 @@ export default function IngredientsView() {
 
   return (
     <div className="ingredients-view">
-      <header className="ingredients-head">
-        <div>
-          <h2>Ingredients</h2>
-          <p className="muted">Every ingredient from your recipes and this month's plan, with its store section and the Walmart product you buy.</p>
+      <header className="page-head">
+        <div className="page-head-main">
+          <h1 className="page-title">Ingredients</h1>
+          <p className="page-sub">Every ingredient from your recipes and this month's plan, with its store section and the Walmart product you buy.</p>
         </div>
         {matchedRows.length > 0 && (
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary"
             onClick={refreshAll}
             disabled={Boolean(refreshing) || refreshBlocked}
             title={refreshBlocked ? 'The Walmart connection is not set up on this site' : undefined}
