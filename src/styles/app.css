@@ -2571,3 +2571,10 @@
   flex-wrap: wrap;
   gap: var(--sp-2);
 }
+
+/* Phones: a row with a buy count drops the recipe name so the item stays on one line */
+@media (max-width: 600px) {
+  .grocery-row:has(.grocery-buy) .grocery-sources {
+    display: none;
+  }
+}
