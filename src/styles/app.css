@@ -1570,6 +1570,23 @@
   color: var(--basil);
 }
 
+.grocery-buy {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.grocery-buy .btn {
+  min-width: 28px;
+  padding-inline: 0;
+}
+
+.grocery-buy .mono {
+  min-width: 1.4em;
+  text-align: center;
+}
+
 .walmart-qty {
   display: inline-flex;
   align-items: center;
@@ -2221,6 +2238,7 @@
   .grocery-aside,
   .grocery-add,
   .grocery-walmart,
+  .grocery-buy,
   .grocery-edit,
   .grocery-sortbar,
   .grocery-section-move,

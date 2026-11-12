@@ -334,6 +334,13 @@ export default function GroceryView() {
                         {row.recipes.length > 1 ? `${row.recipes.length} recipes` : row.recipes[0]}
                       </span>
                     )}
+                    {walmart.loaded && !state.checked[row.key] && editing?.key !== row.key && (
+                      <BuyCount
+                        name={row.name}
+                        match={walmart.matches[row.matchKey]}
+                        onQty={(q) => walmart.setQty(row.matchKey, q)}
+                      />
+                    )}
                     {editing?.key !== row.key && (
                       <button
                         type="button"
@@ -475,5 +482,22 @@ export default function GroceryView() {
         />
       )}
     </div>
+  )
+}
+
+// How many to put in the Walmart cart. Only shown once an item has a match.
+function BuyCount({ name, match, onQty }) {
+  if (!match?.product || match.skip) return null
+  const qty = match.qty || 1
+  return (
+    <span className="grocery-buy" aria-label={`Buy count for ${name}`} title="How many to add to the Walmart cart">
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(qty - 1)} disabled={qty <= 1} aria-label={`One fewer ${name}`}>
+        −
+      </button>
+      <span className="mono">{qty}</span>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onQty(qty + 1)} aria-label={`One more ${name}`}>
+        +
+      </button>
+    </span>
   )
 }
