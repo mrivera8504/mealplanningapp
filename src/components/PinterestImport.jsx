@@ -50,7 +50,7 @@ export default function PinterestImport({ onImport, onClose }) {
       if (!link) throw new Error("This pin doesn't link to a recipe site.")
       let recipe
       try {
-        recipe = await extractRecipeFromUrl(link)
+        recipe = await extractRecipeFromUrl(link, pin.title)
       } catch (err) {
         throw new Error(
           err.code === 'quota_exceeded'

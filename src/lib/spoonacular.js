@@ -122,9 +122,12 @@ export async function getRecipeDetail(spoonacularId) {
   return detail
 }
 
-/** Extract a recipe from an arbitrary URL via Spoonacular. */
-export async function extractRecipeFromUrl(url) {
-  const data = await call('/extract', { url })
+/**
+ * A recipe from a web page: read from the page's own recipe block when it has
+ * one (free), otherwise via Spoonacular. `hint` picks among several on a page.
+ */
+export async function extractRecipeFromUrl(url, hint) {
+  const data = await call('/extract', hint ? { url, hint: hint.slice(0, 200) } : { url })
   return normalizeRecipe(data)
 }
 

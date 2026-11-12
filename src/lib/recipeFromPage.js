@@ -148,12 +148,30 @@ function image(img) {
   return typeof first === 'string' ? first : first.url || first.contentUrl || null
 }
 
+const words = (s) => new Set(clean(s).toLowerCase().match(/[a-z]{3,}/g) || [])
+
+/** On a round-up page with several recipes, the one whose name shares most words with `hint`. */
+function pickRecipe(nodes, hint) {
+  if (nodes.length <= 1 || !hint) return nodes[0] || null
+  const want = words(hint)
+  let best = nodes[0]
+  let bestScore = -1
+  for (const node of nodes) {
+    const score = [...words(node.name)].filter((w) => want.has(w)).length
+    if (score > bestScore) {
+      best = node
+      bestScore = score
+    }
+  }
+  return best
+}
+
 /**
  * The page's recipe, shaped like a Spoonacular extract result, or null when
  * the page has no usable Recipe block.
  */
-export function recipeFromHtml(html, pageUrl) {
-  const node = jsonLdNodes(html).find(isRecipe)
+export function recipeFromHtml(html, pageUrl, hint = '') {
+  const node = pickRecipe(jsonLdNodes(html).filter(isRecipe), hint)
   if (!node) return null
   const ingredients = asArray(node.recipeIngredient || node.ingredients).map(parseIngredientLine).filter((i) => i.name)
   if (!ingredients.length) return null

@@ -63,6 +63,12 @@ describe('recipeFromHtml', () => {
     expect(n.sourceUrl).toBe('https://example.com/carnitas')
   })
 
+  it('picks the recipe matching the hint on a round-up page', () => {
+    const two = `<script type="application/ld+json">[{"@type":"Recipe","name":"Classic Mac","recipeIngredient":["1 lb pasta"]},{"@type":"Recipe","name":"Lobster Mac and Cheese","recipeIngredient":["1 lb lobster"]}]</script>`
+    expect(recipeFromHtml(two, 'x').title).toBe('Classic Mac')
+    expect(recipeFromHtml(two, 'x', 'Fancy lobster mac and cheese for the slow cooker').title).toBe('Lobster Mac and Cheese')
+  })
+
   it('returns null without a recipe block', () => {
     expect(recipeFromHtml('<html><script type="application/ld+json">{"@type":"Article"}</script></html>', 'x')).toBeNull()
     expect(recipeFromHtml('<html></html>', 'x')).toBeNull()
