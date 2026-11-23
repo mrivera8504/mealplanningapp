@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { describePinterestError, loadBoard, pinDestination } from '../lib/pinterest'
-import { extractRecipeFromUrl } from '../lib/spoonacular'
+import { describeImportError, extractRecipeFromUrl } from '../lib/spoonacular'
 
 /**
  * Bring recipes in from a public Pinterest board. Paste the board's link
@@ -46,17 +46,20 @@ export default function PinterestImport({ onImport, onClose }) {
   const importPin = async (pin) => {
     setBusy((b) => ({ ...b, [pin.id]: 'working' }))
     try {
-      const link = await pinDestination(pin)
-      if (!link) throw new Error("This pin doesn't link to a recipe site.")
+      let link
+      try {
+        link = await pinDestination(pin)
+      } catch {
+        throw new Error("Pinterest didn't say where this pin links to. Try again in a minute, or open the pin and paste its recipe link under Add recipe.")
+      }
+      if (!link) throw new Error("This pin doesn't link to a recipe site -- it may be just a picture.")
+      if (/(instagram|tiktok|youtube|youtu\.be|facebook)\.com|youtu\.be/i.test(link))
+        throw new Error("This pin links to a video or social post, not a recipe page, so there's nothing to read.")
       let recipe
       try {
         recipe = await extractRecipeFromUrl(link, pin.title)
       } catch (err) {
-        throw new Error(
-          err.code === 'quota_exceeded'
-            ? "This site doesn't share its recipe in a readable form, and today's Spoonacular quota is used up. Try again tomorrow."
-            : "Couldn't read a recipe from that site."
-        )
+        throw new Error(describeImportError(err.code))
       }
       if (!recipe?.ingredients?.length) throw new Error("Couldn't find a recipe on that site.")
       setBusy((b) => {

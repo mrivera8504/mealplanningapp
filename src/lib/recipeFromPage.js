@@ -36,7 +36,14 @@ const decodeEntities = (s) =>
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
 
-const clean = (s) => decodeEntities(String(s ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
+const clean = (s) =>
+  decodeEntities(
+    String(s ?? '')
+      .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
 
 function parseNumber(token) {
   if (!token) return null
@@ -100,7 +107,47 @@ export function parseDuration(iso) {
 
 const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v])
 
-const isRecipe = (node) => asArray(node?.['@type']).some((t) => String(t).toLowerCase() === 'recipe')
+// "Recipe", "schema:Recipe", "http://schema.org/Recipe" all count.
+const isRecipe = (node) => asArray(node?.['@type']).some((t) => /(^|[/:])recipe$/i.test(String(t).trim()))
+
+/**
+ * Parse one JSON-LD block, forgiving the mistakes real sites ship: HTML
+ * comments or CDATA wrapped around it, raw line breaks and tabs inside
+ * strings, and trailing commas. Returns null when it still won't parse.
+ */
+export function parseJsonLd(text) {
+  const body = String(text || '')
+    .replace(/^\s*(?:<!--|<!\[CDATA\[)/, '')
+    .replace(/(?:-->|\]\]>)\s*$/, '')
+    .trim()
+  try {
+    return JSON.parse(body)
+  } catch {
+    /* try the repairs below */
+  }
+  let out = ''
+  let inString = false
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (inString) {
+      if (ch === '\\') {
+        out += ch + (body[i + 1] ?? '')
+        i++
+        continue
+      }
+      if (ch === '"') inString = false
+      out += ch === '\n' ? '\\n' : ch === '\r' ? '' : ch === '\t' ? ' ' : ch
+      continue
+    }
+    if (ch === '"') inString = true
+    out += ch
+  }
+  try {
+    return JSON.parse(out.replace(/,\s*([\]}])/g, '$1'))
+  } catch {
+    return null
+  }
+}
 
 /** Every JSON-LD object on the page, including those nested in @graph or arrays. */
 function jsonLdNodes(html) {
@@ -111,13 +158,11 @@ function jsonLdNodes(html) {
     out.push(node)
     if (node['@graph']) visit(node['@graph'])
     if (node.mainEntity) visit(node.mainEntity)
+    // Round-up pages list their recipes as an ItemList.
+    if (node.itemListElement && !isRecipe(node)) visit(asArray(node.itemListElement).map((el) => el?.item || el))
   }
-  for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
-    try {
-      visit(JSON.parse(m[1].trim()))
-    } catch {
-      /* some sites ship invalid JSON-LD; skip it */
-    }
+  for (const m of html.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
+    visit(parseJsonLd(m[1]))
   }
   return out
 }
@@ -127,9 +172,10 @@ function steps(instructions) {
   const walk = (node) => {
     if (!node) return
     if (typeof node === 'string') {
-      clean(node)
+      String(node)
+        .replace(/<br\s*\/?>|<\/p>|<\/li>/gi, '\n')
         .split(/\n+/)
-        .map((s) => s.trim())
+        .map(clean)
         .filter(Boolean)
         .forEach((s) => out.push(s))
       return
@@ -167,17 +213,88 @@ function pickRecipe(nodes, hint) {
 }
 
 /**
+ * Older sites mark their recipe up with microdata (itemprop="recipeIngredient")
+ * instead of JSON-LD. Read that into the same shape as a JSON-LD node.
+ */
+function microdataRecipe(html) {
+  if (!/itemtype=["'][^"']*schema\.org\/Recipe["']/i.test(html)) return null
+  const props = (name) =>
+    [...html.matchAll(new RegExp(`<([a-z0-9]+)[^>]*itemprop=["']${name}["'][^>]*?(?:content=["']([^"']*)["'][^>]*)?>([\\s\\S]*?)</\\1>`, 'gi'))].map(
+      (m) => m[2] ?? m[3]
+    )
+  const metas = (name) =>
+    [...html.matchAll(new RegExp(`<meta[^>]*itemprop=["']${name}["'][^>]*content=["']([^"']*)["']`, 'gi'))].map((m) => m[1])
+  const ingredients = [...props('recipeIngredient'), ...props('ingredients')].map(clean).filter(Boolean)
+  if (!ingredients.length) return null
+  return {
+    name: props('name')[0] || '',
+    recipeIngredient: ingredients,
+    recipeInstructions: props('recipeInstructions').map(clean),
+    totalTime: metas('totalTime')[0] || props('totalTime')[0],
+    prepTime: metas('prepTime')[0],
+    cookTime: metas('cookTime')[0],
+    recipeYield: props('recipeYield')[0] || metas('recipeYield')[0],
+    image: metas('image')[0] || null,
+  }
+}
+
+/**
+ * Text that's page code, a bot check or a cookie banner rather than part of
+ * a recipe. Scrapers that can't find a recipe return that kind of text, and
+ * it should never land in someone's recipe book.
+ */
+export function looksLikeJunk(text) {
+  const t = String(text || '')
+  if (!t.trim()) return false
+  if (/\b(function\s*\(|=>|var\s+\w+\s*=|let\s+\w+\s*=|const\s+\w+\s*=|window\.|document\.|googletag|dataLayer|adsbygoogle|__NEXT_DATA__|\.push\(|JSON\.parse)/.test(t)) return true
+  if (/enable javascript|javascript is (disabled|required)|checking your browser|just a moment|verify you are (a )?human|are you a robot|access denied|captcha|cloudflare|please wait while|accept (all )?cookies|cookie (policy|settings)|ad blocker/i.test(t)) return true
+  // Lots of braces, semicolons and the like: code, not a sentence.
+  const symbols = (t.match(/[{};=<>|&$]/g) || []).length
+  return t.length > 30 && symbols / t.length > 0.04
+}
+
+/**
+ * Drop the junk lines from a recipe (Spoonacular-extract shaped). Returns
+ * null when what's left isn't a recipe: a junk title, or no real ingredients.
+ */
+export function withoutJunk(raw) {
+  if (!raw) return null
+  if (looksLikeJunk(raw.title)) return null
+  const ingredients = (raw.extendedIngredients || []).filter(
+    (i) => !looksLikeJunk(i.original || i.name) && String(i.original || i.name || '').length < 250
+  )
+  if (!ingredients.length) return null
+  const steps = (raw.analyzedInstructions?.[0]?.steps || []).filter((st) => !looksLikeJunk(st.step))
+  return {
+    ...raw,
+    summary: looksLikeJunk(raw.summary) ? '' : raw.summary,
+    extendedIngredients: ingredients,
+    analyzedInstructions: [{ steps: steps.map((st, i) => ({ ...st, number: i + 1 })) }],
+  }
+}
+
+/** A page that's a bot check or a "turn on JavaScript" wall rather than the site itself. */
+export function isBlockedPage(html) {
+  const head = String(html || '').slice(0, 20000)
+  return /<title>\s*(just a moment|attention required|access denied|security check|please wait)/i.test(head) || /cf-browser-verification|challenge-platform|captcha-delivery|px-captcha/i.test(head)
+}
+
+/**
  * The page's recipe, shaped like a Spoonacular extract result, or null when
  * the page has no usable Recipe block.
  */
 export function recipeFromHtml(html, pageUrl, hint = '') {
-  const node = pickRecipe(jsonLdNodes(html).filter(isRecipe), hint)
+  const node = pickRecipe(jsonLdNodes(html).filter(isRecipe), hint) || microdataRecipe(html)
   if (!node) return null
-  const ingredients = asArray(node.recipeIngredient || node.ingredients).map(parseIngredientLine).filter((i) => i.name)
+  // Some sites put every ingredient in one string, one per line.
+  const lines = asArray(node.recipeIngredient || node.ingredients)
+    .flatMap((x) => (typeof x === 'string' ? x.split(/\n+/) : [x?.text || x?.name || '']))
+    .filter((x) => String(x).trim())
+  const ingredients = lines.map(parseIngredientLine).filter((i) => i.name)
   if (!ingredients.length) return null
   const category = asArray(node.recipeCategory).map((c) => clean(c).toLowerCase())
   const servings = parseInt(asArray(node.recipeYield).map(String).find((y) => /\d/.test(y)) || '', 10)
-  return {
+  return withoutJunk({
     id: null,
     title: clean(node.name) || 'Imported recipe',
     image: image(node.image),
@@ -192,5 +309,5 @@ export function recipeFromHtml(html, pageUrl, hint = '') {
     diets: [],
     extendedIngredients: ingredients.map((i) => ({ name: i.name, nameClean: i.name, amount: i.amount, unit: i.unit, original: i.original })),
     analyzedInstructions: [{ steps: steps(node.recipeInstructions).map((step, i) => ({ number: i + 1, step })) }],
-  }
+  })
 }

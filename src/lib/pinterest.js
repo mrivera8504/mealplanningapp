@@ -35,3 +35,12 @@ export function describePinterestError(code) {
   if (code === 'blocked') return 'Pinterest turned the request away. Try again in a few minutes.'
   return "Couldn't reach Pinterest. Check your connection and try again."
 }
+
+/** A link to a single pin (or a pin.it short link) rather than to a recipe site. */
+export const isPinLink = (url) => /^(https?:\/\/)?(pin\.it\/|([a-z]+\.)?pinterest\.[a-z.]+\/pin\/)/i.test(String(url).trim())
+
+/** Where a pin link leads: the recipe site, or null. */
+export async function pinLinkDestination(url) {
+  const { link } = await call(`pin?url=${encodeURIComponent(String(url).trim())}`)
+  return link || null
+}

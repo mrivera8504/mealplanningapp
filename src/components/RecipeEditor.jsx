@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CATEGORY_LABELS } from '../lib/houseRecipes'
 import { uploadRecipeImage } from '../lib/storage'
-import { extractRecipeFromUrl } from '../lib/spoonacular'
+import { describeImportError, extractRecipeFromUrl } from '../lib/spoonacular'
 import { COURSES, courseOf } from '../lib/courses'
 
 const EMPTY_ING = { amount: '', unit: '', name: '' }
@@ -67,8 +67,8 @@ export default function RecipeEditor({ recipe, draft, onSave, onClose, user, def
       setStepsText((r.steps || []).join('\n'))
       if (r.image) setImagePreview(r.image)
       setImportUrl('')
-    } catch {
-      setImportError('Could not import that URL. Try a different recipe site or enter the recipe manually.')
+    } catch (err) {
+      setImportError(describeImportError(err.code))
     } finally {
       setImporting(false)
     }

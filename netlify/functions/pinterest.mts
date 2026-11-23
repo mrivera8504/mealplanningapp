@@ -12,6 +12,7 @@ import type { Config, Context } from "@netlify/functions";
  *
  *   GET /api/pinterest/board?url=<board link>  → { board, pins: [{ id, title, image, link, pinUrl }], source }
  *   GET /api/pinterest/pin?id=<pin id>          → { link }   (the pin's destination, or null)
+ *   GET /api/pinterest/pin?url=<pin link>       → the same, from a pin link or pin.it short link
  */
 
 const json = (body: unknown, status = 200) =>
@@ -73,12 +74,31 @@ const pinTitle = (p: any) =>
     .trim()
     .slice(0, 140);
 
+/**
+ * GET JSON from the widget API. It's served from two hosts, and both now and
+ * then refuse a request that works a moment later, so each gets two tries.
+ */
+async function widgetJson(path: string) {
+  let last = "widget failed";
+  for (const host of ["widgets.pinterest.com", "api.pinterest.com", "widgets.pinterest.com"]) {
+    try {
+      const res = await fetch(`https://${host}${path}`, { headers: HEADERS, signal: AbortSignal.timeout(6000) });
+      if (res.status === 404) throw Object.assign(new Error("widget 404"), { final: true });
+      if (!res.ok) {
+        last = `widget ${res.status}`;
+        continue;
+      }
+      return await res.json();
+    } catch (err) {
+      if ((err as any).final) throw err;
+      last = (err as Error).name === "TimeoutError" ? "widget timeout" : (err as Error).message || last;
+    }
+  }
+  throw new Error(last);
+}
+
 async function fromWidget(user: string, board: string) {
-  const res = await fetch(`https://widgets.pinterest.com/v3/pidgets/boards/${encodeURIComponent(user)}/${encodeURIComponent(board)}/pins/`, {
-    headers: HEADERS,
-  });
-  if (!res.ok) throw new Error(`widget ${res.status}`);
-  const data: any = await res.json();
+  const data: any = await widgetJson(`/v3/pidgets/boards/${encodeURIComponent(user)}/${encodeURIComponent(board)}/pins/`);
   const pins: any[] = data?.data?.pins || [];
   if (!pins.length) throw new Error("widget empty");
   return {
@@ -94,7 +114,10 @@ async function fromWidget(user: string, board: string) {
 }
 
 async function fromRss(user: string, board: string) {
-  const res = await fetch(`https://www.pinterest.com/${encodeURIComponent(user)}/${encodeURIComponent(board)}.rss`, { headers: HEADERS });
+  const res = await fetch(`https://www.pinterest.com/${encodeURIComponent(user)}/${encodeURIComponent(board)}.rss`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(6000),
+  });
   if (!res.ok) throw new Error(`rss ${res.status}`);
   const xml = await res.text();
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1]);
@@ -120,17 +143,17 @@ async function fromRss(user: string, board: string) {
 /** A pin's destination (the recipe site), via the widget pin endpoint, then the pin page itself. */
 async function pinLink(id: string) {
   try {
-    const res = await fetch(`https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=${encodeURIComponent(id)}`, { headers: HEADERS });
-    if (res.ok) {
-      const data: any = await res.json();
-      const link = external(data?.data?.[0]?.link);
-      if (link) return link;
-    }
+    const data: any = await widgetJson(`/v3/pidgets/pins/info/?pin_ids=${encodeURIComponent(id)}`);
+    const link = external(data?.data?.[0]?.link);
+    if (link) return link;
   } catch {
     /* fall through */
   }
-  const res = await fetch(`https://www.pinterest.com/pin/${encodeURIComponent(id)}/`, { headers: HEADERS });
-  if (!res.ok) return null;
+  const res = await fetch(`https://www.pinterest.com/pin/${encodeURIComponent(id)}/`, { headers: HEADERS, signal: AbortSignal.timeout(6000) });
+  if (!res.ok) {
+    console.log(`pinterest: pin page ${res.status}`);
+    return null;
+  }
   const html = await res.text();
   for (const m of html.matchAll(/"link"\s*:\s*"(https?:[^"]+)"/g)) {
     const link = external(JSON.parse(`"${m[1]}"`));
@@ -145,11 +168,26 @@ export default async (req: Request, context: Context) => {
   const inUrl = new URL(req.url);
 
   if (what === "pin") {
-    const id = inUrl.searchParams.get("id") || "";
+    let id = inUrl.searchParams.get("id") || "";
+    // A pin link (pinterest.com/pin/123/ or a pin.it short link) instead of an id.
+    const pinUrl = inUrl.searchParams.get("url");
+    if (pinUrl) {
+      try {
+        let url = new URL(pinUrl);
+        if (url.hostname === "pin.it") {
+          const res = await fetch(url, { redirect: "follow", headers: HEADERS, signal: AbortSignal.timeout(6000) });
+          url = new URL(res.url);
+        }
+        id = url.pathname.match(/\/pin\/(?:[^/]*--)?([\w-]+)/)?.[1] || "";
+      } catch {
+        id = "";
+      }
+    }
     if (!/^[\w-]{1,80}$/.test(id)) return json({ error: "bad_pin" }, 400);
     try {
       return json({ link: await pinLink(id) });
-    } catch {
+    } catch (err) {
+      console.log(`pinterest: pin lookup failed: ${(err as Error).message}`);
       return json({ error: "unreachable" }, 502);
     }
   }
@@ -171,6 +209,7 @@ export default async (req: Request, context: Context) => {
     }
     // A 404 from both means the board isn't public (or doesn't exist); anything else, Pinterest refused us.
     const notFound = reasons.every((r) => / 404$|empty$/.test(r));
+    console.log(`pinterest: board not loaded: ${reasons.join("; ")}`);
     return json({ error: notFound ? "not_found" : "blocked", detail: reasons }, notFound ? 404 : 502);
   }
 

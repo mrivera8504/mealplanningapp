@@ -1,4 +1,6 @@
 import { courseFromDishTypes } from './courses'
+import { withoutJunk } from './recipeFromPage'
+import { isPinLink, pinLinkDestination } from './pinterest'
 
 /**
  * Client for the /api/recipes serverless proxy (see netlify/functions).
@@ -127,8 +129,29 @@ export async function getRecipeDetail(spoonacularId) {
  * one (free), otherwise via Spoonacular. `hint` picks among several on a page.
  */
 export async function extractRecipeFromUrl(url, hint) {
+  // A Pinterest pin is a picture with a link; the recipe is on the site it links to.
+  if (isPinLink(url)) {
+    const dest = await pinLinkDestination(url).catch(() => null)
+    if (!dest) throw new SpoonacularError('pin_no_link')
+    url = dest
+  }
   const data = await call('/extract', hint ? { url, hint: hint.slice(0, 200) } : { url })
-  return normalizeRecipe(data)
+  // The server already filters this; checked again so nothing odd reaches the editor.
+  const recipe = withoutJunk(data)
+  if (!recipe) throw new SpoonacularError('unreadable')
+  return normalizeRecipe(recipe)
+}
+
+/** Why an import from a link failed, in words. */
+export function describeImportError(code) {
+  if (code === 'unreadable')
+    return "That site didn't share a readable recipe -- it may block apps from reading it. Open the page and type or paste the recipe in instead."
+  if (code === 'quota_exceeded')
+    return "That site doesn't share its recipe in a readable form, and today's Spoonacular quota is used up. Try again tomorrow, or type it in."
+  if (code === 'pin_no_link')
+    return "That's a Pinterest pin, and Pinterest didn't say which site it links to. Open the pin, tap through to the recipe, and paste that page's link."
+  if (code === 'not_configured') return "That site doesn't share its recipe in a readable form. Type or paste it in instead."
+  return "Couldn't read a recipe from that link. Check it opens in your browser, or type the recipe in."
 }
 
 /** A batch of random dinners for the weekly discovery mix (~1.1 quota points per call). */
