@@ -1403,11 +1403,17 @@
   border-bottom: none;
 }
 
+/*
+ * A row is the item's text (name and amount, then where it's from) and its
+ * controls. When both don't fit -- a phone, or a row with a buy count and a
+ * section picker -- the controls wrap onto their own line instead of
+ * squeezing the text until it spills over them.
+ */
 .grocery-label {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: var(--sp-2);
-  flex: 1;
+  flex: 1 1 14rem;
   cursor: pointer;
   min-width: 0;
 }
@@ -1417,7 +1423,38 @@
   height: 1.1rem;
   accent-color: var(--primary);
   flex-shrink: 0;
-  align-self: center;
+  margin-top: 0.2rem;
+}
+
+.grocery-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.grocery-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+}
+
+.grocery-meta {
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grocery-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+  margin-left: auto;
+  flex-shrink: 0;
+  max-width: 100%;
 }
 
 .grocery-name {
@@ -1432,15 +1469,6 @@
 .grocery-qty {
   font-size: var(--text-sm);
   color: var(--ink-faint);
-  white-space: nowrap;
-}
-
-.grocery-sources {
-  font-size: var(--text-xs);
-  max-width: 30%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .grocery-add {
@@ -1450,10 +1478,6 @@
 
 .grocery-add .input {
   flex: 1;
-}
-
-.grocery-renamed {
-  font-size: var(--text-xs);
 }
 
 .grocery-rename {
@@ -2427,6 +2451,37 @@
   cursor: pointer;
 }
 
+.merge-pick-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-3) 0 0;
+  max-height: min(50vh, 22rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.merge-pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-1);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.merge-pick:hover,
+.merge-pick:focus-visible {
+  background: var(--primary-wash);
+}
+
 .merge-name {
   display: flex;
   flex-direction: column;
@@ -2581,9 +2636,53 @@
   gap: var(--sp-2);
 }
 
-/* Phones: a row with a buy count drops the recipe name so the item stays on one line */
+
+/*
+ * Phones: two lines per grocery item -- name and amount on top, then where
+ * it's from with the item's controls beside it. The label's own boxes step
+ * aside (display: contents) so its parts can sit in the row's grid; tapping
+ * the name or the box still checks the item.
+ */
 @media (max-width: 600px) {
-  .grocery-row:has(.grocery-buy) .grocery-sources {
-    display: none;
+  .grocery-row:not(:has(.grocery-rename)) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'box line line'
+      'box meta controls';
+    column-gap: var(--sp-2);
+    row-gap: 2px;
+    align-items: center;
+    padding: 0.55rem var(--sp-4);
+  }
+
+  .grocery-row .grocery-label,
+  .grocery-row .grocery-text {
+    display: contents;
+  }
+
+  .grocery-row .grocery-label input {
+    grid-area: box;
+    align-self: start;
+    margin-top: 0.25rem;
+  }
+
+  .grocery-row .grocery-line {
+    grid-area: line;
+  }
+
+  .grocery-row .grocery-meta {
+    grid-area: meta;
+  }
+
+  .grocery-row .grocery-controls {
+    grid-area: controls;
+    margin-left: 0;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .grocery-section-select {
+    max-width: 8.5rem;
   }
 }

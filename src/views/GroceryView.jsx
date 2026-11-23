@@ -7,6 +7,9 @@ import { useWalmartProducts } from '../hooks/useWalmartProducts'
 import { useIngredients } from '../hooks/useIngredients'
 import { useSettings } from '../context/SettingsContext'
 import WalmartPicker from '../components/WalmartPicker'
+import GroceryMergeDialog from '../components/GroceryMergeDialog'
+import Menu, { MenuItem } from '../components/Menu'
+import { mergeIngredients, splitIngredient } from '../lib/ingredientsPage'
 import { buildGroceryItems, canonicalKey, normalizeName } from '../lib/grocery'
 import { walmartCartUrl } from '../lib/walmart'
 import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
@@ -40,6 +43,7 @@ export default function GroceryView() {
   const [pickerQueue, setPickerQueue] = useState(null)
   const [renames, setRenames] = useState({})
   const [editing, setEditing] = useState(null) // { key, draft }
+  const [mergingRow, setMergingRow] = useState(null) // the row being merged into another
 
   const meals = useMemo(
     () =>
@@ -125,6 +129,29 @@ export default function GroceryView() {
     setRenames(next)
     repo.saveGroceryNames({ renames: next })
     if (state.checked[row.key]) persist({ ...state, checked: { ...state.checked, [newKey]: true } })
+  }
+
+  /** Keys merged into this row (from here or the Ingredients page), so they can be split out again. */
+  const mergedInto = (row) =>
+    row.extra ? [] : Object.entries(ingredients.aliases || {}).filter(([k, to]) => to === row.matchKey && k !== row.matchKey).map(([k]) => k)
+
+  const nameOfKey = (key) => ingredients.items[key]?.name || key
+
+  /** Merge `row` and `target` into one line, remembered every week (same store as the Ingredients page). */
+  const mergeRows = (row, target, keptName) => {
+    const keptKey = target.matchKey
+    const { data, walmartCopy } = mergeIngredients(ingredients, walmart.matches, [row.matchKey, keptKey], keptKey, keptName)
+    ingredients.write((d) => ({ ...d, items: data.items, aliases: data.aliases }))
+    if (walmartCopy) walmart.put(keptKey, walmartCopy)
+    if (state.checked[row.key] && !state.checked[target.key]) persist({ ...state, checked: { ...state.checked, [target.key]: true } })
+    setMergingRow(null)
+    toast(`${row.name} and ${target.name} are one line now: ${keptName}.`)
+  }
+
+  const splitRow = (row) => {
+    const keys = mergedInto(row)
+    ingredients.write((d) => keys.reduce((acc, k) => splitIngredient(acc, k), d))
+    toast(`${row.name} is split back into ${keys.length + 1} lines.`)
   }
 
   const clearChecked = () => {
@@ -317,87 +344,97 @@ export default function GroceryView() {
                         </button>
                       </form>
                     ) : (
-                      <label className="grocery-label">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(state.checked[row.key])}
-                          onChange={() => toggle(row.key)}
-                        />
-                        <span className="grocery-name">{row.name}</span>
-                        {row.renamedFrom.length > 0 && (
-                          <span className="grocery-renamed muted">was {row.renamedFrom.join(', ')}</span>
-                        )}
-                        {row.quantities && <span className="mono grocery-qty">{row.quantities}</span>}
-                      </label>
-                    )}
-                    {row.recipes.length > 0 && (
-                      <span className="grocery-sources muted" title={row.recipes.join(' · ')}>
-                        {row.recipes.length > 1 ? `${row.recipes.length} recipes` : row.recipes[0]}
-                      </span>
-                    )}
-                    {walmart.loaded && !state.checked[row.key] && editing?.key !== row.key && (
-                      <BuyCount
-                        name={row.name}
-                        match={walmart.matches[row.matchKey]}
-                        onQty={(q) => walmart.setQty(row.matchKey, q)}
-                      />
-                    )}
-                    {editing?.key !== row.key && (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm grocery-edit"
-                        onClick={() => setEditing({ key: row.key, draft: row.name })}
-                        aria-label={`Rename ${row.name}`}
-                        title="Rename"
-                      >
-                        ✎
-                      </button>
-                    )}
-                    {row.extra && (
-                      <button
-                        type="button"
-                        className="btn btn-danger-ghost btn-sm"
-                        onClick={() => removeExtra(row.key)}
-                        aria-label={`Remove ${row.name}`}
-                      >
-                        ✕
-                      </button>
-                    )}
-                    {sortMode === 'section' && editing?.key !== row.key && (
-                      <select
-                        className="grocery-section-select"
-                        value={sectionOfRow(row)}
-                        onChange={(e) => ingredients.setSection(row.matchKey, e.target.value)}
-                        aria-label={`Section for ${row.name}`}
-                      >
-                        {SECTIONS.map((sec) => (
-                          <option key={sec} value={sec}>
-                            {sec}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {sortMode === 'manual' && editing?.key !== row.key && (
-                      <span className="grocery-move">
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => nudgeRow(row.matchKey, -1)}
-                          disabled={shownKeys.indexOf(row.matchKey) === 0}
-                          aria-label={`Move ${row.name} up`}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => nudgeRow(row.matchKey, 1)}
-                          disabled={shownKeys.indexOf(row.matchKey) === shownKeys.length - 1}
-                          aria-label={`Move ${row.name} down`}
-                        >
-                          ↓
-                        </button>
-                      </span>
+                      <>
+                        <label className="grocery-label">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(state.checked[row.key])}
+                            onChange={() => toggle(row.key)}
+                          />
+                          <span className="grocery-text">
+                            <span className="grocery-line">
+                              <span className="grocery-name">{row.name}</span>
+                              {row.quantities && <span className="mono grocery-qty">{row.quantities}</span>}
+                            </span>
+                            {(row.recipes.length > 0 || row.renamedFrom.length > 0 || mergedInto(row).length > 0) && (
+                              <span className="grocery-meta muted" title={row.recipes.join(' · ')}>
+                                {[
+                                  row.renamedFrom.length > 0 && `was ${row.renamedFrom.join(', ')}`,
+                                  mergedInto(row).length > 0 && `includes ${mergedInto(row).map(nameOfKey).join(', ')}`,
+                                  row.recipes.length > 1 ? `${row.recipes.length} recipes` : row.recipes[0],
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                        <div className="grocery-controls">
+                          {walmart.loaded && !state.checked[row.key] && (
+                            <BuyCount
+                              name={row.name}
+                              match={walmart.matches[row.matchKey]}
+                              onQty={(q) => walmart.setQty(row.matchKey, q)}
+                            />
+                          )}
+                          {sortMode === 'section' && (
+                            <select
+                              className="grocery-section-select"
+                              value={sectionOfRow(row)}
+                              onChange={(e) => ingredients.setSection(row.matchKey, e.target.value)}
+                              aria-label={`Section for ${row.name}`}
+                            >
+                              {SECTIONS.map((sec) => (
+                                <option key={sec} value={sec}>
+                                  {sec}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {sortMode === 'manual' && (
+                            <span className="grocery-move">
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => nudgeRow(row.matchKey, -1)}
+                                disabled={shownKeys.indexOf(row.matchKey) === 0}
+                                aria-label={`Move ${row.name} up`}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => nudgeRow(row.matchKey, 1)}
+                                disabled={shownKeys.indexOf(row.matchKey) === shownKeys.length - 1}
+                                aria-label={`Move ${row.name} down`}
+                              >
+                                ↓
+                              </button>
+                            </span>
+                          )}
+                          <Menu label={`Options for ${row.name}`} icon="more" iconOnly align="end" buttonClass="btn btn-ghost btn-icon btn-sm grocery-edit">
+                            <MenuItem icon="pencil" onSelect={() => setEditing({ key: row.key, draft: row.name })}>
+                              Rename
+                            </MenuItem>
+                            {!row.extra && (
+                              <MenuItem icon="merge" onSelect={() => setMergingRow(row)}>
+                                Merge with…
+                              </MenuItem>
+                            )}
+                            {mergedInto(row).length > 0 && (
+                              <MenuItem icon="move" onSelect={() => splitRow(row)}>
+                                Split apart
+                              </MenuItem>
+                            )}
+                            {row.extra && (
+                              <MenuItem icon="trash" danger onSelect={() => removeExtra(row.key)}>
+                                Remove
+                              </MenuItem>
+                            )}
+                          </Menu>
+                        </div>
+                      </>
                     )}
                   </li>
                 ))}
@@ -471,6 +508,15 @@ export default function GroceryView() {
             </form>
           </aside>
         </div>
+      )}
+
+      {mergingRow && (
+        <GroceryMergeDialog
+          row={mergingRow}
+          rows={allRows.filter((r) => !r.extra && r.key !== mergingRow.key)}
+          onMerge={mergeRows}
+          onClose={() => setMergingRow(null)}
+        />
       )}
 
       {pickerQueue && (
