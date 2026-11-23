@@ -51,6 +51,10 @@ function RecipeRow({ recipe, onPick }) {
  * the dinner slot, or sides / desserts -- which can also be typed as a plain
  * name, since most don't need a recipe.
  */
+// Put the cursor in the text box on open only with a mouse. On a phone that
+// throws the keyboard up over the list before you've decided to type.
+const FOCUS_ON_OPEN = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches
+
 export default function MealPicker({ dayName, course = 'main', onPick, onClose, mine: allMine, saved: allSaved }) {
   const info = courseInfo(course)
   const mine = ofCourse(allMine, course)
@@ -165,7 +169,7 @@ export default function MealPicker({ dayName, course = 'main', onPick, onClose, 
                 value={quickName}
                 onChange={(e) => setQuickName(e.target.value)}
                 aria-label={`Name of the ${info.one}`}
-                autoFocus
+                autoFocus={FOCUS_ON_OPEN}
               />
               <button type="submit" className="btn btn-primary" disabled={!quickName.trim()}>
                 Add
@@ -204,7 +208,7 @@ export default function MealPicker({ dayName, course = 'main', onPick, onClose, 
               placeholder="Search for a recipe..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              autoFocus={course === 'main'}
+              autoFocus={FOCUS_ON_OPEN && course === 'main'}
             />
             <select
               className="input picker-cuisine"
