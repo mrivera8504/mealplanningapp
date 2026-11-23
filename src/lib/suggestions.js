@@ -1,6 +1,6 @@
 import { HOUSE_RECIPES } from './houseRecipes'
 import { HOUSE_DESSERTS, HOUSE_SIDES } from './houseExtras'
-import { courseOf, mainBrings, sideKind } from './courses'
+import { courseOf, dessertsOf, mainBrings, sideKind } from './courses'
 import { moodForDay } from './weather'
 import { fromISODate, toISODate } from './dates'
 
@@ -54,7 +54,8 @@ const daysBetween = (isoA, isoB) =>
 /** What a day holds for one course, as a list: its dinner, its sides, or its dessert. */
 export function dishesOf(day, course = 'main') {
   if (course === 'side') return (day?.sides || []).filter(Boolean)
-  const dish = course === 'dessert' ? day?.dessert : day?.dinner
+  if (course === 'dessert') return dessertsOf(day)
+  const dish = day?.dinner
   return dish ? [dish] : []
 }
 

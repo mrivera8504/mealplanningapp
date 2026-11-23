@@ -308,6 +308,11 @@
   color: var(--primary-text);
 }
 
+.pill-holiday {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
 .pill-warn {
   background: var(--warn-wash);
   color: var(--warn-text);
@@ -530,6 +535,10 @@
 
 .day-row-today {
   background: color-mix(in srgb, var(--primary-wash) 45%, var(--surface));
+}
+
+.day-row-holiday {
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .day-row-dragover {

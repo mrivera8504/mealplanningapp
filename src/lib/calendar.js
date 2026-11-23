@@ -120,7 +120,7 @@ async function gcal(token, calendarId, path, { method = 'GET', body, params } = 
 }
 
 /**
- * Push the week's dinners. days: [{iso, meal, sides?, dessert?}] with meal.title.
+ * Push the week's dinners. days: [{iso, meal, sides?, desserts?, holiday?}] with meal.title.
  * Sides and dessert go in the dinner event's description, not events of their own.
  * dinnerTime "HH:MM"; prepMinutes sets a popup reminder that far ahead.
  * Returns count of events written.
@@ -147,10 +147,10 @@ export async function pushWeekToCalendar(token, weekId, days, { dinnerTime = '18
     await gcal(token, calendarId, '/events', {
       method: 'POST',
       body: {
-        summary: `Dinner: ${day.meal.title}`,
+        summary: day.holiday ? `${day.holiday.name}: ${day.meal.title}` : `Dinner: ${day.meal.title}`,
         description: [
           day.sides?.length ? `Sides: ${day.sides.map((x) => x.title).join(', ')}` : null,
-          day.dessert ? `Dessert: ${day.dessert.title}` : null,
+          day.desserts?.length ? `Dessert${day.desserts.length > 1 ? 's' : ''}: ${day.desserts.map((x) => x.title).join(', ')}` : null,
           "Planned with What's for Dinner.",
           day.meal.sourceUrl ? `Recipe: ${day.meal.sourceUrl}` : null,
         ]

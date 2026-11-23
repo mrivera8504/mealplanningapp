@@ -1,17 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { swapDays, trimOldDays, withDinner, withSide, withSideReplaced, withoutSide } from '../lib/planShape'
+import { dessertsOf } from '../lib/courses'
+import {
+  swapDays,
+  trimOldDays,
+  withDessert,
+  withDessertReplaced,
+  withDinner,
+  withHoliday,
+  withSide,
+  withSideReplaced,
+  withoutDessert,
+  withoutSide,
+} from '../lib/planShape'
 
 const EMPTY_PLAN = { days: {} }
 
 function hasMeals(plan) {
-  return Object.values(plan?.days || {}).some((d) => d?.dinner || d?.sides?.length || d?.dessert)
+  return Object.values(plan?.days || {}).some((d) => d?.dinner || d?.sides?.length || dessertsOf(d).length)
 }
 
 /**
  * The full meal plan:
- *   { days: { 'YYYY-MM-DD': { dinner: recipe, sides: [recipe], dessert: recipe } } }
- * `sides` and `dessert` are optional; days planned before they existed have only `dinner`.
+ *   { days: { 'YYYY-MM-DD': { dinner: recipe, sides: [recipe], desserts: [recipe], holiday?: { name } } } }
+ * `sides` and `desserts` are optional; see planShape.js for older shapes.
  *
  * Stored as a single Firestore document ('current') that accumulates meals
  * indexed by date — no key rotation, no data loss across day boundaries.
@@ -116,8 +128,10 @@ export function usePlan() {
   const addSide = useCallback((iso, side) => mutateDay(iso, (day) => withSide(day, side)), [mutateDay])
   const replaceSide = useCallback((iso, oldId, side) => mutateDay(iso, (day) => withSideReplaced(day, oldId, side)), [mutateDay])
   const removeSide = useCallback((iso, sideId) => mutateDay(iso, (day) => withoutSide(day, sideId)), [mutateDay])
-  const setDessert = useCallback((iso, dessert) => mutateDay(iso, (day) => ({ ...day, dessert })), [mutateDay])
-  const removeDessert = useCallback((iso) => mutateDay(iso, (day) => ({ ...day, dessert: null })), [mutateDay])
+  const addDessert = useCallback((iso, dessert) => mutateDay(iso, (day) => withDessert(day, dessert)), [mutateDay])
+  const replaceDessert = useCallback((iso, oldId, dessert) => mutateDay(iso, (day) => withDessertReplaced(day, oldId, dessert)), [mutateDay])
+  const removeDessert = useCallback((iso, dessertId) => mutateDay(iso, (day) => withoutDessert(day, dessertId)), [mutateDay])
+  const setHoliday = useCallback((iso, holiday) => mutateDay(iso, (day) => withHoliday(day, holiday)), [mutateDay])
 
   /** Swap two nights whole: dinner, sides and dessert travel together. */
   const moveMeal = useCallback(
@@ -132,5 +146,5 @@ export function usePlan() {
     setSaving(false)
   }, [repo])
 
-  return { plan, loading, saving, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save }
+  return { plan, loading, saving, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, addDessert, replaceDessert, removeDessert, setHoliday, save }
 }

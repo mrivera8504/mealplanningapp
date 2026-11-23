@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { courseFromDishTypes, courseOf, mainBrings, ofCourse, quickEntry, sideKind } from './courses'
-import { swapDays, trimOldDays, withDinner, withSide, withSideReplaced, withoutSide } from './planShape'
+import { courseFromDishTypes, courseOf, dessertsOf, limitsFor, mainBrings, ofCourse, quickEntry, sideKind } from './courses'
+import {
+  holidayNameFor,
+  swapDays,
+  trimOldDays,
+  withDessert,
+  withDessertReplaced,
+  withDinner,
+  withHoliday,
+  withSide,
+  withSideReplaced,
+  withoutDessert,
+  withoutSide,
+} from './planShape'
 import { buildPool, servedDates, suggestExtra } from './suggestions'
 import { HOUSE_DESSERTS, HOUSE_SIDES } from './houseExtras'
 import { buildGroceryItems } from './grocery'
@@ -153,9 +165,60 @@ describe('plan shape', () => {
       tue: { dinner: { id: 'm2' } },
     }
     const moved = swapDays(days, 'mon', 'tue')
-    expect(moved.tue).toMatchObject({ dinner: { id: 'm1' }, sides: [{ id: 'a' }], dessert: { id: 'd' } })
-    expect(moved.mon).toMatchObject({ dinner: { id: 'm2' }, sides: [], dessert: null })
-    expect(swapDays(days, 'mon', 'wed').mon).toMatchObject({ dinner: null, sides: [], dessert: null })
+    expect(moved.tue).toMatchObject({ dinner: { id: 'm1' }, sides: [{ id: 'a' }], desserts: [{ id: 'd' }] })
+    expect(moved.mon).toMatchObject({ dinner: { id: 'm2' }, sides: [], desserts: [] })
+    expect(moved.mon.dessert).toBeUndefined()
+    expect(swapDays(days, 'mon', 'wed').mon).toMatchObject({ dinner: null, sides: [], desserts: [] })
+  })
+
+  it('keeps a holiday on its date when the dishes move', () => {
+    const days = { thu: { holiday: { name: 'Thanksgiving' }, dinner: { id: 't' } }, fri: { dinner: { id: 'f' } } }
+    const moved = swapDays(days, 'thu', 'fri')
+    expect(moved.thu).toMatchObject({ holiday: { name: 'Thanksgiving' }, dinner: { id: 'f' } })
+    expect(moved.fri.holiday).toBeUndefined()
+  })
+
+  it('reads desserts from old single-dessert days and new lists alike', () => {
+    expect(dessertsOf({ dessert: side('d') })).toMatchObject([{ id: 'd' }])
+    expect(dessertsOf({ desserts: [side('a'), side('b')] })).toHaveLength(2)
+    expect(dessertsOf({})).toEqual([])
+    expect(dessertsOf(undefined)).toEqual([])
+  })
+
+  it('a regular night holds one dessert: a new one replaces it', () => {
+    const day = withDessert({ dessert: side('pie') }, side('cake'))
+    expect(day.desserts.map((d) => d.id)).toEqual(['cake'])
+    expect(day.dessert).toBeUndefined()
+  })
+
+  it('a holiday holds more sides and desserts, up to its limits', () => {
+    let day = withHoliday({ dinner: { id: 'turkey' } }, { name: 'Thanksgiving' })
+    const { sides: maxSides, desserts: maxDesserts } = limitsFor(day)
+    expect(maxSides).toBeGreaterThan(limitsFor({}).sides)
+    for (let i = 0; i < maxSides + 2; i++) day = withSide(day, side(`s${i}`))
+    expect(day.sides).toHaveLength(maxSides)
+    for (let i = 0; i < maxDesserts + 2; i++) day = withDessert(day, side(`d${i}`))
+    expect(day.desserts).toHaveLength(maxDesserts)
+    day = withDessertReplaced(day, 'd1', side('pecan'))
+    expect(day.desserts.map((d) => d.id).slice(0, 3)).toEqual(['d0', 'pecan', 'd2'])
+    day = withoutDessert(day, 'd0')
+    expect(day.desserts).toHaveLength(maxDesserts - 1)
+  })
+
+  it('turning a holiday off keeps every dish but stops adding past the everyday limits', () => {
+    let day = withHoliday({ dinner: { id: 't' } }, { name: 'Holiday' })
+    for (let i = 0; i < 5; i++) day = withSide(day, side(`s${i}`))
+    day = withHoliday(day, null)
+    expect(day.holiday).toBeUndefined()
+    expect(day.sides).toHaveLength(5)
+    expect(withSide(day, side('more')).sides).toHaveLength(5)
+  })
+
+  it('names Thanksgiving and a few fixed-date holidays', () => {
+    expect(holidayNameFor('2026-11-26')).toBe('Thanksgiving')
+    expect(holidayNameFor('2027-11-25')).toBe('Thanksgiving')
+    expect(holidayNameFor('2026-11-19')).toBe('Holiday')
+    expect(holidayNameFor('2026-12-25')).toBe('Christmas')
   })
 
   it('trims days older than two months to what history needs, once', () => {

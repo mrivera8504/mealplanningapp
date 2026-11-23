@@ -12,6 +12,7 @@ import { walmartCartUrl } from '../lib/walmart'
 import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
 import { SORT_MODES, arrangeRows, moveInOrder, shiftSection } from '../lib/groceryOrder'
 import { fmtWeekRange, toISODate, weekDates, weekIdFor } from '../lib/dates'
+import { dessertsOf } from '../lib/courses'
 
 /**
  * Grocery list for the current week. The generated list is derived from the
@@ -42,11 +43,11 @@ export default function GroceryView() {
 
   const meals = useMemo(
     () =>
-      // Everything cooked this week: each night's dinner, its sides and its dessert.
+      // Everything cooked this week: each night's dinner, its sides and its desserts.
       weekDates(startIso)
         .flatMap((d) => {
           const day = plan.days[d.iso]
-          return [day?.dinner, ...(day?.sides || []), day?.dessert]
+          return [day?.dinner, ...(day?.sides || []), ...dessertsOf(day)]
         })
         .filter(Boolean),
     [plan, startIso]

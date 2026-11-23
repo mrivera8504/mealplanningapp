@@ -5,7 +5,7 @@ import Icon from './Icon'
 import Menu, { MenuDivider, MenuItem, MenuLabel } from './Menu'
 import { moodForDay } from '../lib/weather'
 import { fromISODate, isToday } from '../lib/dates'
-import { MAX_SIDES } from '../lib/courses'
+import { limitsFor } from '../lib/courses'
 
 const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -76,7 +76,9 @@ export default function DayCard({
   onSaveRecipe,
   onDismissSave,
   sides = [],
-  dessert = null,
+  desserts = [],
+  holiday = null, // { name } when the night is a holiday: more sides and desserts fit
+  onToggleHoliday,
   onSuggestExtra, // (course, replacing?)
   onPickExtra, // (course)
   onRemoveExtra, // (course, dish)
@@ -88,9 +90,10 @@ export default function DayCard({
   const today = isToday(day.iso)
   const date = fromISODate(day.iso)
   const showSavePrompt = pendingSave && meal?.id === pendingSave.id
-  const canAddSide = meal && !meal.takeout && sides.length < MAX_SIDES
-  const canAddDessert = !dessert && (meal || sides.length > 0)
-  const hasNight = meal || sides.length > 0 || dessert
+  const limits = limitsFor({ holiday })
+  const canAddSide = meal && !meal.takeout && sides.length < limits.sides
+  const canAddDessert = desserts.length < limits.desserts && (meal || sides.length > 0)
+  const hasNight = meal || sides.length > 0 || desserts.length > 0
 
   const handleDrop = (e) => {
     e.preventDefault()
@@ -143,6 +146,10 @@ export default function DayCard({
               Suggest a dessert
             </MenuItem>
           )}
+          <MenuDivider />
+          <MenuItem icon="star" onSelect={onToggleHoliday}>
+            {holiday ? 'Back to a regular night' : 'Make it a holiday'}
+          </MenuItem>
           {hasNight && (
             <>
               <MenuDivider />
@@ -163,8 +170,8 @@ export default function DayCard({
 
   return (
     <section
-      className={`day-row${today ? ' day-row-today' : ''}${dragOver ? ' day-row-dragover' : ''}`}
-      aria-label={`${day.name}, ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
+      className={`day-row${today ? ' day-row-today' : ''}${holiday ? ' day-row-holiday' : ''}${dragOver ? ' day-row-dragover' : ''}`}
+      aria-label={`${day.name}, ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}${holiday ? `, ${holiday.name}` : ''}`}
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
@@ -176,6 +183,7 @@ export default function DayCard({
         <span className="day-row-dow">{SHORT_DAYS[date.getDay()]}</span>
         <span className="day-row-num">{date.getDate()}</span>
         {today && <span className="pill pill-primary">Tonight</span>}
+        {holiday && <span className="pill pill-holiday">{holiday.name}</span>}
       </div>
 
       <div className="day-row-dinner">
@@ -252,15 +260,16 @@ export default function DayCard({
             onRemove={(d) => onRemoveExtra('side', d)}
           />
         ))}
-        {dessert && (
+        {desserts.map((x) => (
           <ExtraChip
-            dish={dessert}
+            key={x.id}
+            dish={x}
             kind="Dessert"
             onView={onViewDish}
             onSwap={(d) => onSuggestExtra('dessert', d)}
             onRemove={(d) => onRemoveExtra('dessert', d)}
           />
-        )}
+        ))}
         {(canAddSide || canAddDessert) && (
           <Menu label="+ Add" buttonClass="extra-add" menuLabel={`Add to ${day.name}`} buttonContent="+ Add">
             {canAddSide && (

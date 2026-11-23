@@ -18,7 +18,8 @@ import Menu, { MenuDivider, MenuItem, MenuLabel } from '../components/Menu'
 import { buildPool, dishesOf, plannedNights, servedDates, styleOf, suggestExtra, suggestForDay } from '../lib/suggestions'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
 import { HOUSE_DESSERTS, HOUSE_SIDES } from '../lib/houseExtras'
-import { courseInfo, ofCourse } from '../lib/courses'
+import { courseInfo, dessertsOf, limitsFor, ofCourse } from '../lib/courses'
+import { holidayNameFor } from '../lib/planShape'
 import { describeRefillError } from '../lib/library'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
@@ -31,7 +32,7 @@ export default function WeekView({ onOpenSettings }) {
   const toast = useToast()
   const { settings } = useSettings()
   const [startIso, setStartIso] = useState(() => toISODate(new Date()))
-  const { plan, loading, saving, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, setDessert, removeDessert, save } = usePlan()
+  const { plan, loading, saving, setMeal, removeMeal, moveMeal, addSide, replaceSide, removeSide, addDessert, replaceDessert, removeDessert, setHoliday, save } = usePlan()
   const { saved, isSaved, toggleSave } = useSavedRecipes()
   const { mine } = useMyRecipes()
   // "From my recipes" fills dinners, so only mains -- sides and desserts have their own buttons.
@@ -279,8 +280,10 @@ export default function WeekView({ onOpenSettings }) {
   const weekExtraIds = (course) => new Set(days.flatMap((d) => dishesOf(plan.days[d.iso], course).map((x) => x.id)))
 
   const placeExtra = (iso, course, recipe, replacing = null) => {
-    if (course === 'dessert') setDessert(iso, recipe)
-    else if (replacing) replaceSide(iso, replacing.id, recipe)
+    if (course === 'dessert') {
+      if (replacing) replaceDessert(iso, replacing.id, recipe)
+      else addDessert(iso, recipe)
+    } else if (replacing) replaceSide(iso, replacing.id, recipe)
     else addSide(iso, recipe)
   }
 
@@ -318,8 +321,22 @@ export default function WeekView({ onOpenSettings }) {
   }
 
   const removeExtra = (iso, course, dish) => {
-    if (course === 'dessert') removeDessert(iso)
+    if (course === 'dessert') removeDessert(iso, dish.id)
     else removeSide(iso, dish.id)
+  }
+
+  /** Mark a night as a holiday (more sides, more desserts), or back to a regular night. */
+  const toggleHoliday = (iso, dayName) => {
+    const day = plan.days[iso] || {}
+    if (!day.holiday) {
+      const name = holidayNameFor(iso)
+      setHoliday(iso, { name })
+      toast(`${dayName} is ${name === 'Holiday' ? 'a holiday' : name} -- add up to ${limitsFor({ holiday: true }).sides} sides and ${limitsFor({ holiday: true }).desserts} desserts.`)
+      return
+    }
+    setHoliday(iso, null)
+    const over = (day.sides?.length || 0) > limitsFor({}).sides || dessertsOf(day).length > 1
+    toast(over ? `${dayName} is a regular night again. Everything planned stays -- remove any extras you don't want.` : `${dayName} is a regular night again.`)
   }
 
   /**
@@ -336,7 +353,7 @@ export default function WeekView({ onOpenSettings }) {
     for (const d of days) {
       const day = plan.days[d.iso]
       if (!day?.dinner) continue
-      if (course === 'side' ? day.dinner.takeout || day.sides?.length : day.dessert) continue
+      if (course === 'side' ? day.dinner.takeout || day.sides?.length : dessertsOf(day).length) continue
       open += 1
       const opts = { main: day.dinner.takeout ? null : day.dinner, history: fillHistory, prefs }
       const result =
@@ -391,7 +408,8 @@ export default function WeekView({ onOpenSettings }) {
           iso: d.iso,
           meal: plan.days[d.iso]?.dinner,
           sides: plan.days[d.iso]?.sides || [],
-          dessert: plan.days[d.iso]?.dessert || null,
+          desserts: dessertsOf(plan.days[d.iso]),
+          holiday: plan.days[d.iso]?.holiday || null,
         })),
         { dinnerTime: settings.dinnerTime, calendarId: settings.calendarId }
       )
@@ -524,7 +542,7 @@ export default function WeekView({ onOpenSettings }) {
         <div className="week-list-head" aria-hidden="true">
           <span>Night</span>
           <span>Dinner</span>
-          <span>Sides &amp; dessert</span>
+          <span>Sides &amp; desserts</span>
           <span>Weather</span>
           <span />
         </div>
@@ -545,7 +563,9 @@ export default function WeekView({ onOpenSettings }) {
             onRemove={() => removeMealAt(d.iso)}
             onView={() => openDish(plan.days[d.iso]?.dinner)}
             sides={plan.days[d.iso]?.sides || []}
-            dessert={plan.days[d.iso]?.dessert || null}
+            desserts={dessertsOf(plan.days[d.iso])}
+            holiday={plan.days[d.iso]?.holiday || null}
+            onToggleHoliday={() => toggleHoliday(d.iso, d.name)}
             onSuggestExtra={(course, replacing) => suggestExtraFor(d.iso, course, replacing)}
             onPickExtra={(course) => setPickerFor({ iso: d.iso, name: d.name, course })}
             onRemoveExtra={(course, dish) => removeExtra(d.iso, course, dish)}

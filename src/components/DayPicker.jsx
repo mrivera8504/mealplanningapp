@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { fmtShort } from '../lib/dates'
-import { MAX_SIDES, courseOf } from '../lib/courses'
+import { courseOf, dessertsOf, limitsFor } from '../lib/courses'
 
 /**
  * "Add to which night?" — shown after choosing Add to plan on a recipe. A
@@ -33,10 +33,19 @@ export default function DayPicker({ recipe, days, plan, onPick, onClose }) {
             if (course === 'main') {
               note = dinner ? `replaces ${dinner.title}` : 'open'
             } else if (course === 'side') {
-              blocked = Boolean(dinner?.takeout) || (day?.sides?.length || 0) >= MAX_SIDES
+              blocked = Boolean(dinner?.takeout) || (day?.sides?.length || 0) >= limitsFor(day).sides
               note = dinner?.takeout ? 'takeout night' : blocked ? 'sides are full' : dinner ? `with ${dinner.title}` : 'no dinner yet'
             } else {
-              note = day?.dessert ? `replaces ${day.dessert.title}` : dinner ? `after ${dinner.title}` : 'no dinner yet'
+              const have = dessertsOf(day)
+              const max = limitsFor(day).desserts
+              blocked = max > 1 && have.length >= max
+              note = blocked
+                ? 'desserts are full'
+                : have.length && max <= 1
+                  ? `replaces ${have[0].title}`
+                  : dinner
+                    ? `after ${dinner.title}`
+                    : 'no dinner yet'
             }
             return (
               <li key={d.iso}>

@@ -11,6 +11,7 @@ import { normalizeName } from '../lib/grocery'
 import { SECTIONS } from '../lib/sections'
 import { STATUSES, buildIngredientRows, mergeIngredients, splitIngredient, viewRows } from '../lib/ingredientsPage'
 import { addDays, fmtShort, toISODate } from '../lib/dates'
+import { dessertsOf } from '../lib/courses'
 
 const SORTS = [
   { value: 'name', label: 'Name' },
@@ -47,7 +48,7 @@ export default function IngredientsView() {
     const to = toISODate(addDays(new Date(), 14))
     return Object.entries(plan.days || {})
       .filter(([iso]) => iso >= from && iso <= to)
-      .flatMap(([, day]) => [day?.dinner, ...(day?.sides || []), day?.dessert])
+      .flatMap(([, day]) => [day?.dinner, ...(day?.sides || []), ...dessertsOf(day)])
       .filter((dish) => dish && !dish.takeout)
   }, [plan])
 

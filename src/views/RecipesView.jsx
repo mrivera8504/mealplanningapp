@@ -12,7 +12,7 @@ import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { HOUSE_RECIPES } from '../lib/houseRecipes'
 import { HOUSE_DESSERTS, HOUSE_SIDES } from '../lib/houseExtras'
-import { COURSES, MAX_SIDES, courseInfo, courseOf, ofCourse } from '../lib/courses'
+import { COURSES, courseInfo, courseOf, dessertsOf, limitsFor, ofCourse } from '../lib/courses'
 import { searchRecipes, RECIPE_PAGE_SIZE } from '../lib/spoonacular'
 import { toISODate, weekDates } from '../lib/dates'
 
@@ -40,7 +40,7 @@ export default function RecipesView() {
   const { saved: allSaved, isSaved, toggleSave, updateSaved } = useSavedRecipes()
   const { mine: allMine, upsertMine, removeMine } = useMyRecipes()
   const startIso = toISODate(new Date()) // same rolling 7-day window as WeekView
-  const { plan, setMeal, addSide, setDessert } = usePlan()
+  const { plan, setMeal, addSide, addDessert } = usePlan()
   const days = useMemo(() => weekDates(startIso), [startIso])
 
   const [course, setCourse] = useState('main') // main | side | dessert -- every list below shows one course
@@ -136,11 +136,13 @@ export default function RecipesView() {
     const dayName = days.find((d) => d.iso === iso)?.name
     const placingCourse = courseOf(placing)
     if (placingCourse === 'side') {
-      if ((plan.days[iso]?.sides?.length || 0) >= MAX_SIDES) return
+      if ((plan.days[iso]?.sides?.length || 0) >= limitsFor(plan.days[iso]).sides) return
       addSide(iso, placing)
       toast(`${placing.title} added as a side for ${dayName}.`)
     } else if (placingCourse === 'dessert') {
-      setDessert(iso, placing)
+      const day = plan.days[iso]
+      if (limitsFor(day).desserts > 1 && dessertsOf(day).length >= limitsFor(day).desserts) return
+      addDessert(iso, placing)
       toast(`${placing.title} is dessert for ${dayName}.`)
     } else {
       setMeal(iso, placing)

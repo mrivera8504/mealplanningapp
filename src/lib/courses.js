@@ -4,7 +4,7 @@ import { normalizeName } from './grocery'
  * Courses: every recipe is a main, a side or a dessert. A recipe with no
  * `course` is a main, so everything saved before courses existed still
  * behaves as it did. A night on the plan holds one dinner (a main), up to
- * MAX_SIDES sides, and one dessert.
+ * MAX_SIDES sides, and one dessert -- more on a holiday (see limitsFor).
  */
 
 export const COURSES = [
@@ -14,6 +14,25 @@ export const COURSES = [
 ]
 
 export const MAX_SIDES = 3
+
+/**
+ * A night marked as a holiday (Thanksgiving, a birthday) holds a spread:
+ * more sides and more than one dessert. Only that night; the rest of the
+ * week keeps the everyday limits.
+ */
+export const HOLIDAY_MAX_SIDES = 10
+export const HOLIDAY_MAX_DESSERTS = 5
+
+/** How many sides and desserts a night can hold. */
+export const limitsFor = (day) =>
+  day?.holiday ? { sides: HOLIDAY_MAX_SIDES, desserts: HOLIDAY_MAX_DESSERTS } : { sides: MAX_SIDES, desserts: 1 }
+
+/**
+ * A night's desserts, as a list. Nights saved before holidays existed hold a
+ * single `dessert`; newer ones hold `desserts`.
+ */
+export const dessertsOf = (day) =>
+  (Array.isArray(day?.desserts) ? day.desserts : day?.dessert ? [day.dessert] : []).filter(Boolean)
 
 export const courseOf = (recipe) => recipe?.course || 'main'
 
