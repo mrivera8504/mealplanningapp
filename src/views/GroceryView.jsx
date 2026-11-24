@@ -7,12 +7,14 @@ import { useWalmartProducts } from '../hooks/useWalmartProducts'
 import { useIngredients } from '../hooks/useIngredients'
 import { useSettings } from '../context/SettingsContext'
 import WalmartPicker from '../components/WalmartPicker'
+import WalmartCartCheck from '../components/WalmartCartCheck'
 import GroceryMergeDialog from '../components/GroceryMergeDialog'
 import Menu, { MenuItem } from '../components/Menu'
 import { mergeIngredients, splitIngredient } from '../lib/ingredientsPage'
 import { buildGroceryItems, canonicalKey, groceryListText, normalizeName } from '../lib/grocery'
 import { copyText } from '../lib/clipboard'
 import { walmartCartUrl } from '../lib/walmart'
+import { cartLinesFor, loadCartCheck, newCartCheck, saveCartCheck, toggleFound } from '../lib/cartCheck'
 import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
 import { SORT_MODES, arrangeRows, moveInOrder, shiftSection } from '../lib/groceryOrder'
 import { fmtWeekRange, toISODate, weekDates, weekIdFor } from '../lib/dates'
@@ -24,7 +26,8 @@ import { dessertsOf } from '../lib/courses'
  * by store section (in the household's own section order), by name, or in a
  * manual order that carries over from week to week. Each item can
  * be matched to a remembered Walmart product, and everything matched and not
- * yet checked off can be sent to a Walmart cart in one go.
+ * yet checked off can be sent to a Walmart cart in one go, with a checklist of
+ * what was sent to tick off against the cart.
  */
 export default function GroceryView() {
   const toast = useToast()
@@ -45,6 +48,8 @@ export default function GroceryView() {
   const [renames, setRenames] = useState({})
   const [editing, setEditing] = useState(null) // { key, draft }
   const [mergingRow, setMergingRow] = useState(null) // the row being merged into another
+  const [cartCheck, setCartCheck] = useState(loadCartCheck) // the last send to Walmart, to tick off against the cart
+  const [showCartCheck, setShowCartCheck] = useState(false)
 
   const meals = useMemo(
     () =>
@@ -179,11 +184,9 @@ export default function GroceryView() {
   // Walmart: only items still to get count toward matching and the cart.
   const openRows = allRows.filter((r) => !state.checked[r.key])
   const unmatched = openRows.filter((r) => !walmart.matches[r.matchKey])
-  const cartLines = [...new Map(
-    openRows
-      .filter((r) => walmart.matches[r.matchKey]?.product)
-      .map((r) => [r.matchKey, walmart.matches[r.matchKey]])
-  ).values()].map((m) => ({ itemId: m.product.itemId, qty: m.qty }))
+  const cartLines = cartLinesFor(openRows, walmart.matches)
+  // A send from the last week can still be checked against the cart.
+  const recentCartCheck = cartCheck && Date.now() - cartCheck.sentAt < 7 * 24 * 60 * 60 * 1000 ? cartCheck : null
 
   const groups = arrangeRows(allRows, sortMode, ingredients)
   const shownKeys = [...new Set(groups.flatMap((g) => g.rows.map((r) => r.matchKey)))]
@@ -218,10 +221,21 @@ export default function GroceryView() {
     else toast('Couldn’t copy to the clipboard. Try again, or use Print.', 'warn')
   }
 
+  /** Walmart doesn't say which items it couldn't add, so list what was sent to tick off against the cart. */
   const sendToCart = () => {
     window.open(walmartCartUrl(cartLines), '_blank', 'noopener')
-    if (unmatched.length) toast(`${unmatched.length} item${unmatched.length > 1 ? 's' : ''} weren’t matched — add those by hand.`)
+    const check = newCartCheck(cartLines, unmatched.length)
+    saveCartCheck(check)
+    setCartCheck(check)
+    setShowCartCheck(true)
   }
+
+  const toggleCartFound = (itemId) =>
+    setCartCheck((check) => {
+      const next = toggleFound(check, itemId)
+      saveCartCheck(next)
+      return next
+    })
 
   return (
     <div className="grocery-view">
@@ -477,6 +491,11 @@ export default function GroceryView() {
                   Send {cartLines.length} to Walmart cart
                 </button>
               )}
+              {recentCartCheck && (
+                <button type="button" className="btn btn-ghost btn-sm panel-wide" onClick={() => setShowCartCheck(true)}>
+                  Check the cart · {recentCartCheck.found.length} of {recentCartCheck.lines.length} found
+                </button>
+              )}
               {walmart.loaded && unmatched.length > 0 && (
                 <p className="muted">
                   {unmatched.length} item{unmatched.length > 1 ? 's' : ''} still need{unmatched.length > 1 ? '' : 's'} a Walmart match.
@@ -532,6 +551,10 @@ export default function GroceryView() {
           onMerge={mergeRows}
           onClose={() => setMergingRow(null)}
         />
+      )}
+
+      {showCartCheck && recentCartCheck && (
+        <WalmartCartCheck check={recentCartCheck} onToggle={toggleCartFound} onClose={() => setShowCartCheck(false)} />
       )}
 
       {pickerQueue && (
