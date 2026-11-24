@@ -114,3 +114,19 @@ export function buildGroceryItems(plannedMeals, renames = {}, { aliases = {}, na
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
+
+/**
+ * Plain-text copy of grocery rows, one per line: "garlic (12 clove)", or just
+ * the name when there's no amount. Used by "Copy unmatched" so the list can be
+ * pasted somewhere else.
+ */
+export function groceryListText(rows) {
+  return rows
+    .map((r) => {
+      const name = (r.name || '').trim()
+      const qty = (r.quantities || '').trim()
+      return name && qty ? `${name} (${qty})` : name
+    })
+    .filter(Boolean)
+    .join('\n')
+}

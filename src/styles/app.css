@@ -1356,11 +1356,14 @@
 
 .panel-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-2);
 }
 
+/* Labels stay on one line; a third button wraps to its own row instead of squeezing. */
 .panel-buttons .btn {
   flex: 1;
+  white-space: nowrap;
 }
 
 .progress {

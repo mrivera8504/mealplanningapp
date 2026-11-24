@@ -10,7 +10,8 @@ import WalmartPicker from '../components/WalmartPicker'
 import GroceryMergeDialog from '../components/GroceryMergeDialog'
 import Menu, { MenuItem } from '../components/Menu'
 import { mergeIngredients, splitIngredient } from '../lib/ingredientsPage'
-import { buildGroceryItems, canonicalKey, normalizeName } from '../lib/grocery'
+import { buildGroceryItems, canonicalKey, groceryListText, normalizeName } from '../lib/grocery'
+import { copyText } from '../lib/clipboard'
 import { walmartCartUrl } from '../lib/walmart'
 import { SECTIONS, orderedSections, sectionFor } from '../lib/sections'
 import { SORT_MODES, arrangeRows, moveInOrder, shiftSection } from '../lib/groceryOrder'
@@ -207,6 +208,15 @@ export default function GroceryView() {
 
   const openPicker = (rows) =>
     setPickerQueue(rows.map((r) => ({ key: r.matchKey, name: r.name, quantities: r.quantities })))
+
+  /** Copy the unmatched items, in the order the list shows them, so they can be pasted elsewhere. */
+  const copyUnmatched = async () => {
+    const keys = new Set(unmatched.map((r) => r.key))
+    const rows = groups.flatMap((g) => g.rows).filter((r) => keys.has(r.key))
+    const copied = await copyText(groceryListText(rows))
+    if (copied) toast(`Copied ${rows.length} item${rows.length === 1 ? '' : 's'}.`)
+    else toast('Couldn’t copy to the clipboard. Try again, or use Print.', 'warn')
+  }
 
   const sendToCart = () => {
     window.open(walmartCartUrl(cartLines), '_blank', 'noopener')
@@ -474,9 +484,14 @@ export default function GroceryView() {
               )}
               <div className="panel-buttons">
                 {walmart.loaded && unmatched.length > 0 && (
-                  <button type="button" className="btn btn-secondary" onClick={() => openPicker(unmatched)}>
-                    Match items
-                  </button>
+                  <>
+                    <button type="button" className="btn btn-secondary" onClick={() => openPicker(unmatched)}>
+                      Match items
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={copyUnmatched} title="Copy the unmatched items, one per line">
+                      Copy unmatched
+                    </button>
+                  </>
                 )}
                 <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
                   Print
