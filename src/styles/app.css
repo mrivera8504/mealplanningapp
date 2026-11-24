@@ -1696,6 +1696,88 @@
   margin-top: var(--sp-4);
 }
 
+/* After sending to Walmart: tick off what made it into the cart */
+.cart-check-summary {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+}
+
+.cart-check-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.cart-check-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-2) 0 0;
+  max-height: min(55vh, 28rem);
+  overflow-y: auto;
+  border-top: 1px solid var(--rule);
+}
+
+.cart-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.cart-check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.cart-check-label input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.cart-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cart-check-product {
+  font-weight: 500;
+}
+
+.cart-check-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.cart-check-row-found .cart-check-product {
+  text-decoration: line-through;
+  color: var(--ink-faint);
+}
+
+.cart-check-empty {
+  padding: var(--sp-3) 0;
+}
+
+.cart-check-foot {
+  justify-content: flex-end;
+}
+
 /* ---------- Recipe editor ---------- */
 .recipe-editor {
   max-width: 620px;
