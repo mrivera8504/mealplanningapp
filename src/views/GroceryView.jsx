@@ -224,7 +224,7 @@ export default function GroceryView() {
   /** Walmart doesn't say which items it couldn't add, so list what was sent to tick off against the cart. */
   const sendToCart = () => {
     window.open(walmartCartUrl(cartLines), '_blank', 'noopener')
-    const check = newCartCheck(cartLines, unmatched.length)
+    const check = newCartCheck(cartLines, { unsent: unmatched.length, previous: recentCartCheck })
     saveCartCheck(check)
     setCartCheck(check)
     setShowCartCheck(true)
