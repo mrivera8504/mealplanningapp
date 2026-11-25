@@ -4,7 +4,8 @@ import CategoryGlyph from './CategoryGlyph'
 import Icon from './Icon'
 import Menu, { MenuDivider, MenuItem, MenuLabel } from './Menu'
 import { moodForDay } from '../lib/weather'
-import { fromISODate, isToday } from '../lib/dates'
+import { fmtWeekRange, fromISODate, isToday } from '../lib/dates'
+import { moveTargets, shiftWeekStart } from '../lib/moveTargets'
 import { limitsFor } from '../lib/courses'
 
 const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -52,16 +53,18 @@ function ExtraChip({ dish, kind, onView, onSwap, onRemove }) {
  * dessert, the weather, and one menu with everything you can do to the
  * night. On a phone the row becomes a card.
  *
- * The dinner can be dragged onto another night; "Move to another night"
- * in the menu does the same without dragging. Weather always shows, but
- * only shapes a pick from "Pick for the weather".
+ * The dinner can be dragged onto another night this week; "Move to another
+ * night" in the menu does the same without dragging, and can step to any
+ * other week first. Weather always shows, but only shapes a pick from
+ * "Pick for the weather".
  */
 export default function DayCard({
   day, // { name, iso }
   weatherDay,
   meal,
   busyEvents,
-  otherDays, // [{name, iso}] -- targets for moving
+  weekStart, // ISO date the shown week starts on -- where "Move to another night" opens
+  planDays = {}, // the whole plan's days, so other weeks' nights can say what's on them
   hasMine,
   unit,
   onSuggest,
@@ -86,6 +89,7 @@ export default function DayCard({
 }) {
   const [dragOver, setDragOver] = useState(false)
   const [moving, setMoving] = useState(false)
+  const [moveWeek, setMoveWeek] = useState(weekStart) // the week the move list is showing
   const mood = moodForDay(weatherDay)
   const today = isToday(day.iso)
   const date = fromISODate(day.iso)
@@ -110,10 +114,43 @@ export default function DayCard({
             Back
           </MenuItem>
           <MenuDivider />
-          <MenuLabel>Swap with</MenuLabel>
-          {(otherDays || []).map((d) => (
-            <MenuItem key={d.iso} onSelect={() => onMoveMeal(day.iso, d.iso)}>
-              {d.name}
+          <div className="menu-week-nav">
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item menu-week-step"
+              aria-label="Earlier week"
+              title="Earlier week"
+              onClick={() => setMoveWeek((w) => shiftWeekStart(w, -1))}
+            >
+              <Icon name="chevronLeft" size={16} />
+            </button>
+            <span className="menu-week-range" aria-live="polite">
+              {fmtWeekRange(moveWeek)}
+            </span>
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item menu-week-step"
+              aria-label="Later week"
+              title="Later week"
+              onClick={() => setMoveWeek((w) => shiftWeekStart(w, 1))}
+            >
+              <Icon name="chevronRight" size={16} />
+            </button>
+          </div>
+          <MenuLabel>Move to</MenuLabel>
+          {moveTargets(moveWeek, day.iso, planDays).map((t) => (
+            <MenuItem
+              key={t.iso}
+              onSelect={() => onMoveMeal(day.iso, t.iso)}
+              trailing={
+                <span className="menu-item-note" title={t.swaps ? `Swaps with ${t.note}` : undefined}>
+                  {t.note}
+                </span>
+              }
+            >
+              {t.label}
             </MenuItem>
           ))}
         </>
@@ -153,7 +190,15 @@ export default function DayCard({
           {hasNight && (
             <>
               <MenuDivider />
-              <MenuItem icon="move" keepOpen trailing={<Icon name="chevronRight" size={14} />} onSelect={() => setMoving(true)}>
+              <MenuItem
+                icon="move"
+                keepOpen
+                trailing={<Icon name="chevronRight" size={14} />}
+                onSelect={() => {
+                  setMoveWeek(weekStart)
+                  setMoving(true)
+                }}
+              >
                 Move to another night
               </MenuItem>
               {meal && (

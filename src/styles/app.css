@@ -440,6 +440,38 @@
   color: var(--ink-faint);
 }
 
+.menu-item-note {
+  display: block;
+  max-width: 9.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+}
+
+/* "Move to another night": step the list of nights a week at a time. */
+.menu-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.menu-week-nav .menu-week-step {
+  flex: none;
+  width: 38px;
+  justify-content: center;
+  padding: 0;
+}
+
+.menu-week-range {
+  flex: 1;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
 .menu-item-danger,
 .menu-item-danger .menu-item-icon {
   color: var(--danger);

@@ -21,6 +21,7 @@ import { HOUSE_DESSERTS, HOUSE_SIDES } from '../lib/houseExtras'
 import { courseInfo, dessertsOf, limitsFor, ofCourse } from '../lib/courses'
 import { holidayNameFor } from '../lib/planShape'
 import { describeRefillError } from '../lib/library'
+import { describeMove } from '../lib/moveTargets'
 import { moodForDay } from '../lib/weather'
 import { calendarConfigured, fetchBusyNights, getAccessToken, pushWeekToCalendar } from '../lib/calendar'
 
@@ -157,7 +158,17 @@ export default function WeekView({ onOpenSettings }) {
     clearPendingSave(iso)
   }
 
+  /**
+   * Move (or swap) a whole night. The target can be in another week; then
+   * the dinner leaves the screen, so say where it went. The calendar only
+   * changes on Sync, one week at a time, so a move across weeks needs both
+   * weeks synced.
+   */
   const moveMealAt = (fromIso, toIso) => {
+    if (!days.some((d) => d.iso === toIso)) {
+      const sync = calendarConfigured ? ' Sync both weeks to update your calendar.' : ''
+      toast(`${describeMove(fromIso, toIso, plan.days)}${sync}`)
+    }
     moveMeal(fromIso, toIso)
     setPendingSaves((p) => {
       if (!(fromIso in p) && !(toIso in p)) return p
@@ -553,7 +564,8 @@ export default function WeekView({ onOpenSettings }) {
             weatherDay={forecast?.[d.iso]}
             meal={plan.days[d.iso]?.dinner || null}
             busyEvents={busyNights?.[d.iso]}
-            otherDays={days.filter((x) => x.iso !== d.iso)}
+            weekStart={startIso}
+            planDays={plan.days}
             hasMine={myMains.length > 0}
             unit={unit}
             onSuggest={() => swapFor(d.iso)}
