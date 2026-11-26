@@ -50,11 +50,35 @@ describe('cartLinesFor', () => {
   it('handles an empty list', () => {
     expect(cartLinesFor([], matches)).toEqual([])
   })
+
+  it('sends a count raised by hand, right after raising it', () => {
+    // What the + button does to the remembered product (useWalmartProducts.setQty).
+    const raised = { ...matches, sugar: { ...matches.sugar, qty: 3 } }
+    const rows = [{ matchKey: 'sugar', name: 'sugar' }]
+    expect(cartLinesFor(rows, raised)[0].qty).toBe(3)
+    expect(walmartCartUrl(cartLinesFor(rows, raised))).toBe('https://affil.walmart.com/cart/addToCart?items=10315162|3')
+  })
+})
+
+describe('newCartCheck', () => {
+  const line = (itemId, qty) => ({ itemId, product: `Product ${itemId}`, names: [`item ${itemId}`], qty })
+
+  it('keeps the count sent for every product', () => {
+    const check = newCartCheck([line('1', 1), line('2', 4)], { unsent: 1, now: 5000 })
+    expect(check).toEqual({ sentAt: 5000, lines: [line('1', 1), line('2', 4)], found: [], unsent: 1 })
+  })
+
+  it('points out a count that changed since the last send', () => {
+    const previous = newCartCheck([line('jello', 1), line('milk', 2), line('eggs', 1)], { now: 1000 })
+    const check = newCartCheck([line('jello', 2), line('milk', 2), line('bread', 1)], { previous, now: 2000 })
+    expect(check.lines).toEqual([{ ...line('jello', 2), was: 1 }, line('milk', 2), line('bread', 1)])
+    expect(check.found).toEqual([])
+  })
 })
 
 describe('toggleFound', () => {
   it('ticks and unticks a product', () => {
-    const check = newCartCheck([{ itemId: '1', product: 'A', names: ['a'], qty: 1 }], 2, 1000)
+    const check = newCartCheck([{ itemId: '1', product: 'A', names: ['a'], qty: 1 }], { unsent: 2, now: 1000 })
     expect(check).toEqual({ sentAt: 1000, lines: check.lines, found: [], unsent: 2 })
     const ticked = toggleFound(check, '1')
     expect(ticked.found).toEqual(['1'])

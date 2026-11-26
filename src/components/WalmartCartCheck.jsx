@@ -10,7 +10,9 @@ const fmtSent = (ms) => new Date(ms).toLocaleString([], { weekday: 'short', hour
  * it couldn't add, so this lists everything that was sent, by Walmart product
  * name the way the cart shows them, to tick off while going down the cart.
  * Whatever is left unticked needs adding by hand, and each line links to its
- * product page for that.
+ * product page for that. Each line shows the count sent, and a count that
+ * changed since the last send is pointed out, since Walmart may not update
+ * an item that's already in the cart.
  *
  * check: see lib/cartCheck
  */
@@ -26,6 +28,7 @@ export default function WalmartCartCheck({ check, onToggle, onClose }) {
   const found = new Set(check.found)
   const left = check.lines.filter((l) => !found.has(l.itemId))
   const units = check.lines.reduce((n, l) => n + l.qty, 0)
+  const changed = check.lines.filter((l) => l.was != null).length
   const shown = onlyLeft ? left : check.lines
 
   return (
@@ -37,14 +40,20 @@ export default function WalmartCartCheck({ check, onToggle, onClose }) {
         <p className="overline">Walmart cart · sent {fmtSent(check.sentAt)}</p>
         <h2 className="walmart-picker-title">Did everything make it?</h2>
         <p className="muted">
-          Walmart doesn’t tell the app which items it couldn’t add. Go down your Walmart cart and tick each one here as you find it.
-          Anything left unticked needs adding by hand.
+          Walmart doesn’t tell the app which items it couldn’t add. Go down your Walmart cart and tick each one here as you find it,
+          checking the count matches. Anything left unticked needs adding by hand.
         </p>
         <p className="cart-check-summary">
           Sent {plural(check.lines.length, 'product')}
           {units > check.lines.length && ` (${units} counting quantities)`}.
           {check.unsent > 0 && ` ${plural(check.unsent, 'item')} with no Walmart match ${check.unsent === 1 ? 'wasn’t' : 'weren’t'} sent.`}
         </p>
+        {changed > 0 && (
+          <p className="cart-check-changed-note">
+            {changed === 1 ? '1 count' : `${changed} counts`} changed since your last send. Walmart may not update items that are
+            already in your cart, so check {changed === 1 ? 'that one' : 'those'} closely.
+          </p>
+        )}
         <div className="cart-check-progress">
           <p aria-live="polite">
             {left.length === 0 ? 'Everything is ticked off.' : `Found ${found.size} of ${check.lines.length} · ${left.length} not found yet`}
@@ -63,12 +72,15 @@ export default function WalmartCartCheck({ check, onToggle, onClose }) {
                 <input type="checkbox" checked={found.has(l.itemId)} onChange={() => onToggle(l.itemId)} />
                 <span className="cart-check-text">
                   <span className="cart-check-product">{l.product}</span>
-                  <span className="cart-check-meta">
-                    for {l.names.join(', ')}
-                    {l.qty > 1 && <span className="mono"> · ×{l.qty}</span>}
-                  </span>
+                  <span className="cart-check-meta">for {l.names.join(', ')}</span>
+                  {l.was != null && (
+                    <span className="cart-check-was">
+                      Was ×{l.was} last send. Check the cart shows ×{l.qty}.
+                    </span>
+                  )}
                 </span>
               </label>
+              <span className="cart-check-qty mono">×{l.qty}</span>
               <a
                 className="btn btn-ghost btn-sm"
                 href={walmartProductUrl(l.itemId)}
